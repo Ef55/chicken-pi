@@ -1,0 +1,6 @@
+resolver: lts-21.25
+packages:
+- .
+extra-deps:
+- unbound-generics-0.4.4@sha256:f7fc93641d5043db8938a5e77f463afa7c473edca3ef26097d4b6f98d45e255c,5521
+notify-if-nix-on-path: false
