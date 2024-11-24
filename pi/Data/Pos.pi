@@ -1,10 +1,10 @@
---{ Features: datatypes:inductive, datatypes:arrow-syntax }
+--{ Features: datatypes:inductive, datatypes:explicit-type }
 data Pos =
   O
   S (p: Pos) : Pos
 
---{ Features: datatypes:inductive, datatypes:arrow-syntax }
+--{ Features: datatypes:inductive, datatypes:explicit-type }
 data BinPos =
   MSB
-  xI : BinPos -> BinPos
-  xO : BinPos -> BinPos
+  xI (_: BinPos): BinPos
+  xO (_: BinPos): BinPos
