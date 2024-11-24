@@ -1,0 +1,25 @@
+import Nat
+
+--{ Features: datatypes:indexed, datatypes:parametric, datatypes:arrow-syntax }
+data Vect (T: Type0) : Nat -> Type0 =
+  Nil : (T: Type0) -> Vect T Z
+  Cons : (T: Type 0) -> T -> (n: Nat) -> Vect T n -> Vect T (S n)
+
+--{ Features: matching:parameters, matching:in-return, recursive }
+concat : (T: Type0) -> (n: Nat) -> Vect T n -> (m: Nat) -> Vect T m -> Vect T (plus n m)
+concat T n l m l' = case l in Vect _ n_ return Vect T (n_ + m) of
+  Nil _ -> l'
+  Cons _ n' h t -> Cons _ (n' + m) h (concat n' t m l')
+
+--{ Features: matching:parameters, matching:in-return, recursive }
+head : (T: Type0) -> (n: Nat) -> Vect T (S n) -> T
+head T n v =
+  let retType = (
+    \n -> case n of
+            Z -> Unit
+            S _ -> T
+    ) : Nat -> Type0
+  in
+  case v in Vect _ n_ return retType n_ of
+    Nil _ -> unit
+    Cons _ _ h _ -> h

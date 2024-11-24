@@ -1,0 +1,6 @@
+import Nat
+
+--{ Features: datatypes:indexed, datatypes:arrow-syntax }
+data Fin : Nat -> Type0 =
+  Fz : (n: Nat) -> Fin (S n)
+  Fs : (n: Nat) -> Fin n -> Fin (S n)

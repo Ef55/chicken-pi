@@ -1,0 +1,10 @@
+--{ Features: datatypes:inductive, datatypes:arrow-syntax }
+data Pos =
+  O
+  S (p: Pos) : Pos
+
+--{ Features: datatypes:inductive, datatypes:arrow-syntax }
+data BinPos =
+  MSB
+  xI : BinPos -> BinPos
+  xO : BinPos -> BinPos

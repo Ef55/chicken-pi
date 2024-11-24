@@ -1,0 +1,18 @@
+import Bool
+
+--{ Features: datatypes:inductive }
+data Nat : Type0 =
+  Z
+  S (n: Nat)
+
+--{ Features: matching }
+isZero : Nat -> Bool
+isZero n = case n of
+  Z -> True
+  S _ -> False
+
+--{ Features: matching, recursive }
+plus : Nat -> Nat -> Nat
+plus n m = case n of
+  Z -> m
+  S n' -> S (plus n' m)

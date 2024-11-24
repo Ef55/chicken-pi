@@ -1,0 +1,15 @@
+--{ Features: datatypes }
+data Bool : Type0 =
+  True
+  False
+
+--{ Features: matching }
+and : Bool -> Bool -> Bool
+and l r = case l of
+  True -> r
+  False -> False
+
+or : Bool -> Bool -> Bool
+or l r = case l of
+  True -> True
+  False -> r
