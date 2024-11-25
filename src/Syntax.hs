@@ -87,13 +87,18 @@ data Term
     Subst Term Term 
   | -- | witness to an equality contradiction
     Contra Term
-    
+  | -- | pattern matching
+    Case Term Term [Unbound.Bind Pattern Term]
 
   deriving (Show, Generic)
 
 -- | An argument to a function
 data Arg = Arg {argEp :: Epsilon, unArg :: Term}
   deriving (Show, Generic, Unbound.Alpha, Unbound.Subst Term)
+
+data Pattern
+  = PatCon (Unbound.Embed TName) [TName]
+  deriving (Show, Eq, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 -- | Epsilon annotates the stage of a variable
 data Epsilon
@@ -144,6 +149,14 @@ data TypeDecl = TypeDecl {declName :: TName , declEp :: Epsilon  , declType :: T
 mkDecl :: TName -> Type -> Entry
 mkDecl n ty = Decl (TypeDecl n Rel  ty)
 
+-- | A list of parameters of datatype/constructor
+newtype Telescope = Telescope [TypeDecl]
+  deriving (Show, Generic)
+  deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
+
+-- | A constructor is a name equipped with a telescope
+type Constructor = TypeDecl
+
 -- | Entries are the components of modules
 data Entry
   = -- | Declaration for the type of a term  'x : A'
@@ -152,12 +165,12 @@ data Entry
     -- must already have a type declaration in scope
     Def TName Term
     -- | Adjust the context for relevance checking
-  | Demote Epsilon  
+  | Demote Epsilon 
+  -- | The definition of a datatype
+  | Data TypeDecl [Constructor]
 
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
-
-
 
 
 -----------------------------------------

@@ -173,6 +173,7 @@ piforallStyle = Token.LanguageDef
                   ,"where"
                   ,"case"
                   ,"of"
+                  ,"return"
                   ,"with"
                   ,"contra"
                   ,"subst", "by"
@@ -181,7 +182,6 @@ piforallStyle = Token.LanguageDef
                   ,"TRUSTME"
                   ,"PRINTME"
                   ,"ord"
-                  ,"Bool", "True", "False"
                   ,"if","then","else"
                   ,"Unit", "()"
                   ]
@@ -222,7 +222,6 @@ brackets = Token.brackets tokenizer
 braces = Token.braces tokenizer
 
 
-
 moduleImports :: LParser Module
 moduleImports = do
   reserved "module"
@@ -251,8 +250,8 @@ importDef = do reserved "import" >>  (ModuleImport <$> importName)
 --- Top level declarations
 ---
 
-decl,declDef,valDef :: LParser Entry
-decl =  declDef <|> valDef
+decl,declDef,valDef,dataDef :: LParser Entry
+decl =  declDef <|> valDef <|> dataDef
 
 
 
@@ -265,6 +264,33 @@ valDef = do
   n <- try (do {n <- variable; reservedOp "="; return n})
   val <- expr
   return $ Def n val
+
+dataDef = do
+  try (reserved "data")
+  (tName, tType) <- (do
+    n <- variable
+    t <- colon >> term
+    reservedOp "="
+    return (n, t))
+  constructors <- layout constructorDef (return ())
+  return $ Data (TypeDecl tName Rel tType) constructors
+
+  where
+    constructorDef = do
+      name <- variable
+      colon
+      typ <- term
+      return $ TypeDecl name Rel typ
+
+    -- telescope :: LParser Telescope
+    -- telescope = Telescope <$> many (parens binding)
+
+    -- binding :: LParser TypeDecl
+    -- binding = do
+    --   name <- variable
+    --   colon
+    --   typ <- term
+    --   return $ TypeDecl name Rel typ
 
 
 ------------------------
@@ -316,7 +342,7 @@ expr = do
 -- application.  Breaking it out as a seperate category both
 -- eliminates left-recursion in (<expr> := <expr> <expr>) and
 -- allows us to keep constructors fully applied in the abstract syntax.
-term =  funapp
+term =  funapp <|> patternMatching
 
 
 
@@ -379,10 +405,7 @@ lambda = do reservedOp "\\"
 
 
 bconst  :: LParser Term
-bconst = choice [reserved "Bool"  >> return TyBool,
-                 reserved "False" >> return (LitBool False),
-                 reserved "True"  >> return (LitBool True),
-                 reserved "Unit"   >> return TyUnit,
+bconst = choice [reserved "Unit"   >> return TyUnit,
                  reserved "()"    >> return LitUnit]
 
 
@@ -433,6 +456,26 @@ impProd =
      reservedOp "->"
      tyB <- expr
      return $ TyPi Irr tyA (Unbound.bind x tyB)
+
+-- Pattern matching
+patternMatching :: LParser Term
+patternMatching = do
+  reserved "case"
+  scrutinee <- term
+  reserved "return"
+  ret <- term
+  reserved "of"
+  branches <- layout branch (return ())
+  return $ Case scrutinee ret branches
+
+  where
+    branch = do
+      constructor <- variable
+      bindings <- many variable
+      reservedOp "->"
+      body <- term
+      return $ Unbound.bind (PatCon (Unbound.Embed constructor) bindings) body
+
 
 
 -- Function types have the syntax '(x:A) -> B'.  This production deals

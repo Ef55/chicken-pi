@@ -2,18 +2,18 @@ module Nat where
 import Bool
 
 --{ Features: datatypes:inductive }
-data Nat : Type0 =
-  Z
-  S (n: Nat)
+data Nat : Type =
+  Z : Nat
+  S : (n: Nat) -> Nat
 
 --{ Features: matching }
 isZero : Nat -> Bool
-isZero = \n . case n of
+isZero = \n . case n return Bool of
   Z -> True
-  S _ -> False
+  S n' -> False
 
 --{ Features: matching, recursive }
 plus : Nat -> Nat -> Nat
-plus = \n m . case n of
+plus = \n m . case n return Nat of
   Z -> m
   S n' -> S (plus n' m)

@@ -1,26 +1,35 @@
 {- pi-forall -}
 
--- | The main routines for type-checking
 {-# HLINT ignore "Use forM_" #-}
+
+-- | The main routines for type-checking
 module TypeCheck (tcModules, inferType, checkType) where
 
 import Control.Monad.Except
-
-import Data.Maybe ( catMaybes )
-
+import Data.Maybe (catMaybes)
+import Debug.Trace
 import Environment (D (..), TcMonad)
 import Environment qualified as Env
 import Equal qualified
-import PrettyPrint (Disp (disp), pp, debug)
+import PrettyPrint (Disp (disp), debug, pp)
 import Syntax
-import Debug.Trace
-
-import Text.PrettyPrint.HughesPJ (($$), render)
-
+import Text.PrettyPrint.HughesPJ (render, ($$))
+import Unbound.Generics.LocallyNameless (string2Name)
 import Unbound.Generics.LocallyNameless qualified as Unbound
 
-
-
+splitAppliedConstructor :: Term -> TcMonad (TName, [Term])
+splitAppliedConstructor term = iter term []
+  where
+    iter :: Term -> [Term] -> TcMonad (TName, [Term])
+    iter term acc = case term of
+      App l (Arg _ r) -> iter l (r : acc)
+      (Var name) -> return (name, acc)
+      _ ->
+        Env.err
+          [ DS "Expected constructor at head",
+            DD term,
+            DS "is not headed by a constructor."
+          ]
 
 ---------------------------------------------------------------------
 
@@ -29,13 +38,12 @@ inferType :: Term -> TcMonad Type
 inferType a = case a of
   -- i-var
   (Var x) -> do
-    decl <- Env.lookupTy x     -- make sure the variable is accessible
-    Env.checkStage (declEp decl) 
+    decl <- Env.lookupTy x -- make sure the variable is accessible
+    Env.checkStage (declEp decl)
     return (declType decl)
 
   -- i-type
   TyType -> return TyType
-
   -- i-pi
   (TyPi ep tyA bnd) -> do
     (x, tyB) <- unbind bnd
@@ -45,16 +53,21 @@ inferType a = case a of
 
   -- i-app
   (App a b) -> do
-    ty1 <- inferType a 
-    ty1' <- Equal.whnf ty1 
-    case ty1' of 
-      (TyPi {- SOLN EP -}ep1 {- STUBWITH -} tyA bnd) -> do
-          unless (ep1 == argEp b) $ Env.err 
-            [DS "In application, expected", DD ep1, DS "argument but found", 
-                                            DD b, DS "instead." ]
-          -- if the argument is Irrelevant, resurrect the context 
-          (if ep1 == Irr then Env.extendCtx (Demote Rel) else id) $ checkType (unArg b) tyA 
-          return (instantiate bnd (unArg b) )
+    ty1 <- inferType a
+    ty1' <- Equal.whnf ty1
+    case ty1' of
+      (TyPi {- SOLN EP -} ep1 {- STUBWITH -} tyA bnd) -> do
+        unless (ep1 == argEp b) $
+          Env.err
+            [ DS "In application, expected",
+              DD ep1,
+              DS "argument but found",
+              DD b,
+              DS "instead."
+            ]
+        -- if the argument is Irrelevant, resurrect the context
+        (if ep1 == Irr then Env.extendCtx (Demote Rel) else id) $ checkType (unArg b) tyA
+        return (instantiate bnd (unArg b))
       _ -> Env.err [DS "Expected a function type but found ", DD ty1]
 
   -- i-ann
@@ -62,83 +75,125 @@ inferType a = case a of
     tcType tyA
     checkType a tyA
     return tyA
-  
+
   -- Practicalities
   -- remember the current position in the type checking monad
   (Pos p a) ->
     Env.extendSourceLocation p a $ inferType a
-  
   -- Extensions to the core language
   -- i-unit
   TyUnit -> return TyType
   LitUnit -> return TyUnit
-
   -- i-bool
-  TyBool -> return TyType 
-
+  TyBool -> return TyType
   -- i-true/false
-  (LitBool _) -> return TyBool 
-
+  (LitBool _) -> return TyBool
   -- i-if
   (If a b1 b2) -> do
-      checkType a TyBool
-      tyA <- inferType b1
-      checkType b2 tyA
-      return tyA 
+    checkType a TyBool
+    tyA <- inferType b1
+    checkType b2 tyA
+    return tyA
 
   -- i-sigma
   (TySigma tyA bnd) -> do
     (x, tyB) <- unbind bnd
     tcType tyA
     Env.extendCtx (mkDecl x tyA) $ tcType tyB
-    return TyType 
+    return TyType
   -- i-eq
   (TyEq a b) -> do
     aTy <- inferType a
     checkType b aTy
-    return TyType 
-
-
+    return TyType
+  (Case scrut ret branches) -> do
+    tyS <- inferType scrut
+    ret <- Equal.whnf ret
+    (typeConstructor, _) <- splitAppliedConstructor tyS
+    Just (_, constructors) <- Env.lookupTypeConstructor typeConstructor
+    guard (length branches == length constructors)
+    let branchesCheck = zip constructors branches
+    foldM_
+      ( \_ (TypeDecl expCstr _ typCstr, branch) -> do
+          (PatCon (Unbound.Embed cstr) xs, body) <- Unbound.unbind branch
+          guard (expCstr == cstr)
+          enterBranch xs typCstr $ checkType body ret
+      )
+      ()
+      branchesCheck
+    return ret
 
   -- cannot synthesize the type of the term
-  _ -> 
-    Env.err [DS "Must have a type annotation for", DD a] 
+  _ ->
+    Env.err [DS "Must have a type annotation for", DD a]
 
+enterBranch :: [TName] -> Term -> TcMonad a -> TcMonad a
+enterBranch names typ k = do
+  -- TODO: ensure that typ is already normalized in context
+  typ' <- Equal.whnf typ
+  case (names, typ') of
+    (n : ns, TyPi eps a bnd) -> do
+      let b = instantiate bnd (Var n)
+      Env.extendCtx (Decl $ TypeDecl n eps a) $ enterBranch ns b k
+    -- TODO: errors
+    ([], TyPi _ _ _) ->
+      Env.err
+        [ DS "Unbound argument in pattern:",
+          DD typ',
+          DS "should be fully introduced."
+        ]
+    (n : _, _) ->
+      Env.err
+        [ DS "Too many arguments in pattern:",
+          DD n,
+          DS "is the first unused name."
+        ]
+    (_, _) -> k
 
 -------------------------------------------------------------------------
 
 -- | Make sure that the term is a "type" (i.e. that it has type 'Type')
 tcType :: Term -> TcMonad ()
-tcType tm = Env.withStage Irr $  checkType tm TyType
+tcType tm = Env.withStage Irr $ checkType tm TyType
 
 -------------------------------------------------------------------------
+
 -- | Check that the given term has the expected type
 checkType :: Term -> Type -> TcMonad ()
 checkType tm ty = do
-  ty' <- Equal.whnf ty 
-  case tm of 
+  ty' <- Equal.whnf ty
+  case tm of
     -- c-lam: check the type of a function
-    (Lam ep1  bnd) -> case ty' of
+    (Lam ep1 bnd) -> case ty' of
       (TyPi ep2 tyA bnd2) -> do
         -- unbind the variables in the lambda expression and pi type
         (x, body, tyB) <- unbind2 bnd bnd2
--- epsilons should match up
-        unless (ep1 == ep2) $ Env.err [DS "In function definition, expected", DD ep2, DS "parameter", DD x, 
-                                      DS "but found", DD ep1, DS "instead."] 
+        -- epsilons should match up
+        unless (ep1 == ep2) $
+          Env.err
+            [ DS "In function definition, expected",
+              DD ep2,
+              DS "parameter",
+              DD x,
+              DS "but found",
+              DD ep1,
+              DS "instead."
+            ]
         -- check the type of the body of the lambda expression
         Env.extendCtx (Decl (TypeDecl x ep1 tyA)) (checkType body tyB)
       _ -> Env.err [DS "Lambda expression should have a function type, not", DD ty']
-
     -- Practicalities
-    (Pos p a) -> 
+    (Pos p a) ->
       Env.extendSourceLocation p a $ checkType a ty'
-
     TrustMe -> return ()
-
     PrintMe -> do
       gamma <- Env.getLocalCtx
-      Env.warn [DS "Unmet obligation.\nContext:", DD gamma,
-            DS "\nGoal:", DD ty']  
+      Env.warn
+        [ DS "Unmet obligation.\nContext:",
+          DD gamma,
+          DS "\nGoal:",
+          DD ty'
+        ]
 
     -- Extensions to the core language
     -- c-if
@@ -147,7 +202,7 @@ checkType tm ty = do
       dtrue <- Equal.unify [] a (LitBool True)
       dfalse <- Equal.unify [] a (LitBool False)
       Env.extendCtxs dtrue $ checkType b1 ty'
-      Env.extendCtxs dfalse $ checkType b2 ty' 
+      Env.extendCtxs dfalse $ checkType b2 ty'
     -- c-prod
     (Prod a b) -> do
       case ty' of
@@ -161,7 +216,7 @@ checkType tm ty = do
               DD ty,
               DS "found instead"
             ]
-    
+
     -- c-letpair
     (LetPair p bnd) -> do
       ((x, y), body) <- Unbound.unbind bnd
@@ -172,48 +227,46 @@ checkType tm ty = do
           let tyB = instantiate bnd' (Var x)
           decl <- Equal.unify [] p (Prod (Var x) (Var y))
           Env.extendCtxs ([mkDecl x tyA, mkDecl y tyB] ++ decl) $
-              checkType body ty'
+            checkType body ty'
         _ -> Env.err [DS "Scrutinee of LetPair must have Sigma type"]
-    
+
     -- c-let
     (Let a bnd) -> do
       (x, b) <- unbind bnd
-      tyA <- inferType a 
+      tyA <- inferType a
       Env.extendCtxs [mkDecl x tyA, Def x a] $
-          checkType b ty' 
+        checkType b ty'
     -- c-refl
-    Refl -> case ty' of 
-            (TyEq a b) -> Equal.equate a b
-            _ -> Env.err [DS "Refl annotated with invalid type", DD ty']
+    Refl -> case ty' of
+      (TyEq a b) -> Equal.equate a b
+      _ -> Env.err [DS "Refl annotated with invalid type", DD ty']
     -- c-subst
     (Subst a b) -> do
       -- infer the type of the proof 'b'
       tp <- inferType b
       -- make sure that it is an equality between m and n
       nf <- Equal.whnf tp
-      (m, n) <- case nf of 
-                  TyEq m n -> return (m,n)
-                  _ -> Env.err [DS "Subst requires an equality type, not", DD tp]
+      (m, n) <- case nf of
+        TyEq m n -> return (m, n)
+        _ -> Env.err [DS "Subst requires an equality type, not", DD tp]
       -- if either side is a variable, add a definition to the context
       edecl <- Equal.unify [] m n
       -- if proof is a variable, add a definition to the context
       pdecl <- Equal.unify [] b Refl
       Env.extendCtxs (edecl ++ pdecl) $ checkType a ty'
-    -- c-contra 
+    -- c-contra
     (Contra p) -> do
       ty' <- inferType p
       nf <- Equal.whnf ty'
-      (a, b) <- case nf of 
-                  TyEq m n -> return (m,n)
-                  _ -> Env.err [DS "Contra requires an equality type, not", DD ty']
+      (a, b) <- case nf of
+        TyEq m n -> return (m, n)
+        _ -> Env.err [DS "Contra requires an equality type, not", DD ty']
       a' <- Equal.whnf a
       b' <- Equal.whnf b
       case (a', b') of
-        
-
         (LitBool b1, LitBool b2)
           | b1 /= b2 ->
-            return ()
+              return ()
         (_, _) ->
           Env.err
             [ DS "I can't tell that",
@@ -222,17 +275,11 @@ checkType tm ty = do
               DD b,
               DS "are contradictory"
             ]
-    
-
-
 
     -- c-infer
     _ -> do
       tyA <- inferType tm
       Equal.equate tyA ty'
-    
-
-
 
 --------------------------------------------------------
 -- Using the typechecker for decls and modules and stuff
@@ -301,8 +348,7 @@ tcEntry (Def n term) = do
           let handler (Env.Err ps msg) = throwError $ Env.Err ps (msg $$ msg')
               msg' =
                 disp
-                  [ 
-                    DS "When checking the term",
+                  [ DS "When checking the term",
                     DD term,
                     DS "against the type",
                     DD decl
@@ -323,9 +369,47 @@ tcEntry (Decl decl) = do
   tcType (declType decl)
   return $ AddHint decl
 tcEntry (Demote ep) = return (AddCtx [Demote ep])
+tcEntry dat@(Data typ constructors) = do
+  duplicateTypeBindingCheck typ
+  Env.extendCtx dat $ tcConstructors constructors
+  return $ AddCtx [dat]
+  where
+    tcConstructors :: [Constructor] -> TcMonad ()
+    tcConstructors [] = return ()
+    tcConstructors (h : t) = tcConstructor typ h >> tcConstructors t
 
-
-
+tcConstructor :: TypeDecl -> Constructor -> TcMonad ()
+tcConstructor dat@(TypeDecl dataTypeName _ _) (TypeDecl name _ cstrType) = do
+  -- TODO: positivity check
+  tcType cstrType
+  iter cstrType
+  where
+    iter :: Term -> TcMonad ()
+    iter typ = do
+      typ' <- Equal.whnf typ
+      case typ' of
+        -- Go through the chain of arrows
+        (TyPi _ a bnd) -> do
+          (x, tyB) <- unbind bnd
+          tcType a
+          Env.extendCtxs [mkDecl x TyType] $ iter tyB
+        -- And once the tail is reached
+        _ -> do
+          -- Extract the head
+          (name, _) <- splitAppliedConstructor typ'
+          -- which must by the type being defined.
+          if name == dataTypeName
+            then return ()
+            else
+              Env.err
+                [ DS "The constructor",
+                  DD typ',
+                  DS "should be for type",
+                  DD dataTypeName,
+                  DS ", ",
+                  DD name,
+                  DS "found instead"
+                ]
 
 -- | Make sure that we don't have the same name twice in the
 -- environment. (We don't rename top-level module definitions.)
@@ -348,5 +432,3 @@ duplicateTypeBindingCheck decl = do
               DD decl'
             ]
        in Env.extendSourceLocation p decl $ Env.err msg
-
-
