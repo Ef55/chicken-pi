@@ -1,3 +1,4 @@
+module Nat where
 import Bool
 
 --{ Features: datatypes:inductive }

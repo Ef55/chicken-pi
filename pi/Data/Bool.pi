@@ -1,15 +1,17 @@
+module Bool where
+
 --{ Features: datatypes }
-data Bool : Type0 =
+data Bool : Type =
   True
   False
 
 --{ Features: matching }
 and : Bool -> Bool -> Bool
-and l r = case l of
+and = \l r . case l of
   True -> r
   False -> False
 
 or : Bool -> Bool -> Bool
-or l r = case l of
+or = \ l r . case l of
   True -> True
   False -> r

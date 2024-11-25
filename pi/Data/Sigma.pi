@@ -1,3 +1,5 @@
+module Sigma where
+
 --{ Features: datatypes:dependent, datatypes:parametric }
 data Sigma (A: Type0) (B: A -> Type0) : Type0 =
   Prod (a: A) (b: B a)

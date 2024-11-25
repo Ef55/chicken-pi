@@ -1,3 +1,5 @@
+module Void where
+
 --{ Features: datatypes:empty }
 data Void : Type0 = {}
 

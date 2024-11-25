@@ -1,3 +1,5 @@
+module Fin where
+
 import Nat
 
 --{ Features: datatypes:indexed, datatypes:explicit-type }

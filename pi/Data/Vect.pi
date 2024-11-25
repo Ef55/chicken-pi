@@ -1,3 +1,4 @@
+module Vect where
 import Nat
 
 --{ Features: datatypes:indexed, datatypes:parametric, datatypes:explicit-type }

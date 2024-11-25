@@ -1,3 +1,5 @@
+module Pos where
+
 --{ Features: datatypes:inductive, datatypes:explicit-type }
 data Pos =
   O
