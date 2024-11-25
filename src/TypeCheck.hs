@@ -34,14 +34,18 @@ inferType a = case a of
     return (declType decl)
 
   -- i-type
-  TyType -> return TyType
+  TyType l -> return (TyType (LPlus l 1))
+
 
   -- i-pi
   (TyPi ep tyA bnd) -> do
     (x, tyB) <- unbind bnd
-    tcType tyA
-    Env.extendCtx (Decl (TypeDecl x ep tyA)) (tcType tyB)
-    return TyType
+    l1 <- tcType tyA
+    Env.extendCtx (Decl (TypeDecl x ep tyA)) $ do
+      l2 <- tcType tyB
+      let l = LMax l1 l2
+      return (TyType l)
+
 
   -- i-app
   (App a b) -> do
@@ -59,7 +63,7 @@ inferType a = case a of
 
   -- i-ann
   (Ann a tyA) -> do
-    tcType tyA
+    u <- tcType tyA
     checkType a tyA
     return tyA
   
@@ -70,11 +74,12 @@ inferType a = case a of
   
   -- Extensions to the core language
   -- i-unit
-  TyUnit -> return TyType
+  TyUnit -> return (TyType (LConst 1))
+
   LitUnit -> return TyUnit
 
   -- i-bool
-  TyBool -> return TyType 
+  TyBool -> return $ TyType (LConst 1)
 
   -- i-true/false
   (LitBool _) -> return TyBool 
@@ -89,14 +94,19 @@ inferType a = case a of
   -- i-sigma
   (TySigma tyA bnd) -> do
     (x, tyB) <- unbind bnd
-    tcType tyA
-    Env.extendCtx (mkDecl x tyA) $ tcType tyB
-    return TyType 
+    l1 <- tcType tyA
+    Env.extendCtx (mkDecl x tyA) $ do
+      l2 <- tcType tyB
+      let l = LMax l1 l2
+      return (TyType l)
+
   -- i-eq
   (TyEq a b) -> do
     aTy <- inferType a
     checkType b aTy
-    return TyType 
+    l <- tcType aTy
+    return (TyType l)
+
 
 
 
@@ -108,8 +118,14 @@ inferType a = case a of
 -------------------------------------------------------------------------
 
 -- | Make sure that the term is a "type" (i.e. that it has type 'Type')
-tcType :: Term -> TcMonad ()
-tcType tm = Env.withStage Irr $  checkType tm TyType
+tcType :: Term -> TcMonad Level
+tcType tm = Env.withStage Irr $ do
+  ty <- inferType tm
+  ty' <- Equal.whnf ty
+  case ty' of
+    TyType l -> return l
+    _ -> Env.err [DS "Expected", DD tm, DS "to have type 'Type l' for some level l, but found", DD ty']
+
 
 -------------------------------------------------------------------------
 -- | Check that the given term has the expected type

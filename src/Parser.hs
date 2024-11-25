@@ -357,12 +357,10 @@ impOrExpVar = try ((,Irr) <$> (brackets variable))
               <|> (,Rel) <$> variable
 
 
-typen :: LParser Term
-typen =
+typen :: Level -> LParser Term
+typen l =
   do reserved "Type"
-     return TyType
-
-
+     return $ TyType l
 
   -- Lambda abstractions have the syntax '\x . e' 
 lambda :: LParser Term
@@ -373,10 +371,6 @@ lambda = do reservedOp "\\"
             return $ foldr lam body binds
   where
     lam (x, ep) m = Lam ep (Unbound.bind x m)
-
-
-
-
 
 bconst  :: LParser Term
 bconst = choice [reserved "Bool"  >> return TyBool,
