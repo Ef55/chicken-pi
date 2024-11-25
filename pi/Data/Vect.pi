@@ -8,13 +8,13 @@ data Vect (T: Type0) : Nat -> Type0 =
 
 --{ Features: matching:parameters, matching:in-return, recursive }
 concat : (T: Type0) -> (n: Nat) -> Vect T n -> (m: Nat) -> Vect T m -> Vect T (plus n m)
-concat T n l m l' = case l in Vect _ n_ return Vect T (n_ + m) of
+concat = \ T n l m l' . case l in Vect _ n_ return Vect T (n_ + m) of
   Nil _ -> l'
   Cons _ n' h t -> Cons _ (n' + m) h (concat n' t m l')
 
 --{ Features: matching:parameters, matching:in-return, recursive }
 head : (T: Type0) -> (n: Nat) -> Vect T (S n) -> T
-head T n v =
+head = \ T n v .
   let retType = (
     \n -> case n of
             Z -> Unit

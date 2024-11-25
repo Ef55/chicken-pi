@@ -8,12 +8,12 @@ data Nat : Type0 =
 
 --{ Features: matching }
 isZero : Nat -> Bool
-isZero n = case n of
+isZero = \n . case n of
   Z -> True
   S _ -> False
 
 --{ Features: matching, recursive }
 plus : Nat -> Nat -> Nat
-plus n m = case n of
+plus = \n m . case n of
   Z -> m
   S n' -> S (plus n' m)

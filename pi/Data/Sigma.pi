@@ -6,10 +6,10 @@ data Sigma (A: Type0) (B: A -> Type0) : Type0 =
 
 --{ Features: matching:parameters }
 fst : (A: Type0) -> (B: A -> Type0) -> Sigma A B -> A
-fst A B s = case s of
+fst = \ A B s . case s of
   Prod _ _ a _ -> a
 
 --{ Features: matching:dependent, matching:parameters }
 snd : (A: Type0) -> (B: A -> Type0) -> Sigma A B -> B (fst A)
-snd A B s = case s of
+snd = \ A B s . case s of
   Prod _ _ _ b -> b
