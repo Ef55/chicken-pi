@@ -25,9 +25,9 @@ Note that these should not necessarily be done in order.
    datatypes and pattern matching:
    - [ ] [(Strict) positivity](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html) check.
    - [ ] "[Guardness](https://link.springer.com/chapter/10.1007/3-540-60579-7_3)" check.
-   - [ ] [Dependent pattern matching](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html#the-match-with-end-construction) (i.e. `in` and `return`).
+   - [ ] [Dependent pattern matching](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html#the-match-with-end-construction) (i.e. `as` and `return`).
    - [ ] Type parameters.
-   - [ ] Type indices.
+   - [ ] Type indices + pattern matching extension (`in`).
 
 ## Known differences with Coq
 
