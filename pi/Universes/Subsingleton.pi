@@ -1,0 +1,22 @@
+module Subsingleton where
+
+--{ features: prop, datatypes:empty }
+data False : Prop where {}
+
+--{ features: prop }
+data True : Prop where {
+  Truth
+}
+
+--{ features: set, datatypes }
+data Unit : Set where
+  Parens
+
+--{ features: matching:empty, matching:empty-elim }
+emptyElim : False -> Unit
+emptyElim = \f . case f of {}
+
+--{ features: matching:singleton-elim }
+emptyElim : True -> Unit
+emptyElim = \t . case t of
+  Truth -> Parens
