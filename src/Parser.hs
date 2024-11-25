@@ -352,7 +352,7 @@ funapp = do
 factor =
   choice
     [ Var <$> variable <?> "a variable",
-      typen <?> "Type",
+      typen (LConst 0) <?> "Type",
       lambda <?> "a lambda",
       try letPairExp <?> "a let pair",
       letExpr <?> "a let",

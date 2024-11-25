@@ -34,9 +34,9 @@ equate t1 t2 | Unbound.aeq t1 t2 = return ()
 equate t1 t2 = do
   n1 <- whnf t1
   n2 <- whnf t2
-  case (n1, n2) of
-    (TyType, TyType) -> return ()
-    (Var x, Var y) | x == y -> return ()
+  case (n1, n2) of 
+    (TyType _, TyType _) -> return ()
+    (Var x,  Var y) | x == y -> return ()
     (Lam ep1 bnd1, Lam ep2 bnd2) -> do
       (_, b1, b2) <- unbind2 bnd1 bnd2
       unless (ep1 == ep2) $

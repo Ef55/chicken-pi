@@ -49,13 +49,16 @@ genName = Unbound.string2Name <$> elements ["x", "y", "z", "x0" , "y0"]
 instance Arbitrary (Unbound.Name a) where
     arbitrary = genName
 
-
-
 -- * Core language
 
 -- Terms with no subterms
 base :: Gen Term
-base = elements [TyType, TrustMe, PrintMe, Refl  ]
+base = frequency [
+    (2, TyType <$> arbitrary),      -- Generate TyType with arbitrary Level
+    (1, return TrustMe),
+    (1, return PrintMe),
+    (1, return Refl)
+  ]
 
 -- Generate a random term
 -- In the inner recursion, the bool prevents the generation of TyCon/DataCon applications 
@@ -134,6 +137,27 @@ instance Arbitrary Epsilon where
     arbitrary = elements [ Rel, Irr ]
 
 
+instance Arbitrary Level where
+    arbitrary = sized genLevel
+
+genLevel :: Int -> Gen Level
+genLevel n
+    | n <= 0 = frequency [
+        (2, return (LConst 0)),
+        (1, return (LConst 1)),
+        (1, LVar <$> elements ["l", "m", "n"])
+      ]
+    | otherwise = frequency [
+        (3, LConst <$> arbitrarySizedNatural),
+        (1, LVar <$> elements ["l", "m", "n"]),
+        (2, LMax <$> genLevel n' <*> genLevel n'),
+        (2, LPlus <$> genLevel n' <*> arbitrarySizedNatural)
+      ]
+      where n' = n `div` 2
+
+-- Helper function for natural numbers
+arbitrarySizedNatural :: Gen Integer
+arbitrarySizedNatural = abs <$> arbitrary
 
 
 
