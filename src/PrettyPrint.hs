@@ -337,7 +337,7 @@ instance Display [Arg] where
   display a = PP.sep <$> mapM display a
 
 instance Display Term where
-  display TyType = return $ PP.text "Type"
+  display (TyType _) = return $ PP.text "Type"
   display (Var n) = display n
   display a@(Lam _ b) = do
     n <- ask prec

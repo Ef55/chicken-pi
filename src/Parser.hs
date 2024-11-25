@@ -278,10 +278,13 @@ telescope = do
   return tele
 
 binding :: LParser (TName, Type)
-binding = parens (do
-  name <- option wildcardName (try $ varOrWildcard >>= \n -> colon >> return n)
-  typ <- expr
-  return (name, typ))
+binding =
+  parens
+    ( do
+        name <- option wildcardName (try $ varOrWildcard >>= \n -> colon >> return n)
+        typ <- expr
+        return (name, typ)
+    )
 
 ------------------------
 ------------------------
@@ -369,11 +372,11 @@ impOrExpVar =
   try ((,Irr) <$> (brackets varOrWildcard))
     <|> (,Rel) <$> varOrWildcard
 
-typen :: LParser Term
-typen =
+typen :: Level -> LParser Term
+typen l =
   do
     reserved "Type"
-    return TyType
+    return $ TyType l
 
 -- Lambda abstractions have the syntax '\x . e'
 lambda :: LParser Term
@@ -386,7 +389,6 @@ lambda = do
   where
     lam (x, ep) m = Lam ep (Unbound.bind x m)
 
---
 letExpr :: LParser Term
 letExpr =
   do
