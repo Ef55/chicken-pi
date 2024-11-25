@@ -45,9 +45,6 @@ data Level
   deriving (Show, Eq, Generic)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
-imax :: Integer -> Integer -> Integer
-imax m n = if n == 0 then 0 else max m n
-
 -- | Because types and terms use the same AST, we define the following
 -- type synonym so that we can hint whether a piece of syntax is being used
 -- as a type or as a term.

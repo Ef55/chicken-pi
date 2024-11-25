@@ -40,7 +40,6 @@ inferType a = case a of
   -- i-type
   TyType l -> return (TyType (LPlus l 1))
 
-
   -- i-pi
   (TyPi ep tyA bnd) -> do
     (x, tyB) <- unbind bnd
@@ -49,8 +48,6 @@ inferType a = case a of
       l2 <- tcType tyB
       let l = imax l1 l2
       return (TyType l)
-
-
 
   -- i-app
   (App a b) -> do
