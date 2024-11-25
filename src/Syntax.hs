@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 -- | The abstract syntax of the simple dependently typed language
 -- See the comment at the top of 'Parser' for the concrete syntax of this language
 module Syntax where
@@ -33,15 +35,28 @@ type TName = Unbound.Name Term
 
 -----------------------------------------
 
+-- | Universe levels
+data Level
+  = LConst Integer        -- ^ Constant levels like 0, 1, 2, ...
+  | LVar String           -- ^ Level variables for polymorphic levels
+  | LMax Level Level      -- ^ Maximum of two levels
+  | LPlus Level Integer   -- ^ Level plus a constant
+  deriving (Show, Eq, Generic)
+  deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
+
+imax :: Integer -> Integer -> Integer
+imax m n = if n == 0 then 0 else max m n
+
 -- | Because types and terms use the same AST, we define the following
 -- type synonym so that we can hint whether a piece of syntax is being used
 -- as a type or as a term.
 type Type = Term
 
+
 -- | basic language
 data Term
   = -- | type of types, concretely `Type`
-    TyType
+    TyType Level
   | -- | variable `x`
     Var TName
   | -- | abstraction  `\x. a`
@@ -82,6 +97,9 @@ data Term
 newtype Branch = Branch {getBranch :: Unbound.Bind Pattern Term}
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
+  
+pattern Prop :: Term
+pattern Prop = TyType (LConst 0)
 
 -- | An argument to a function
 data Arg = Arg {argEp :: Epsilon, unArg :: Term}

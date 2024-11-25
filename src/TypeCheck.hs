@@ -18,6 +18,10 @@ import Unbound.Generics.LocallyNameless (string2Name)
 import Unbound.Generics.LocallyNameless qualified as Unbound
 
 ---------------------------------------------------------------------
+-- Helper function for implementing impredicativity
+imax :: Level -> Level -> Level
+imax l1 (LConst 0) = LConst 0
+imax l1 l2 = LMax l1 l2
 
 -- | Infer/synthesize the type of a term
 inferType :: Term -> TcMonad Type
@@ -36,7 +40,7 @@ inferType a = case a of
     l1 <- tcType tyA
     Env.extendCtx (Decl (TypeDecl x ep tyA)) $ do
       l2 <- tcType tyB
-      let l = LMax l1 l2
+      let l = imax l1 l2
       return (TyType l)
 
   -- i-app
@@ -378,7 +382,7 @@ tcEntry (Def n term) = do
           ]
 tcEntry (Decl decl) = do
   duplicateTypeBindingCheck decl
-  tcType (declType decl)
+  u <- tcType (declType decl)
   return $ AddHint decl
 tcEntry (Demote ep) = return (AddCtx [Demote ep])
 tcEntry dat@(Data typ constructors) = do
