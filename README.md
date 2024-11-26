@@ -12,9 +12,11 @@ Note that these should not necessarily be done in order.
    - [ ] Remove (syntax) for irrelevant arguments.
    - [ ] Prevent recursive functions.
 2. "Dirt simple" (no parameters/indices) datatypes (see [oplss notes](https://github.com/sweirich/pi-forall/blob/2023/doc/oplss.pdf) chapter 9):
-   - [ ] Definition.
-   - [ ] Pattern matching (without `as`, `in` and `return`).
-   - [ ] Exhaustivity check for pattern matching.
+   - [X] Definition.
+   - [X] Pattern matching (without `as`, `in` ~and `return`~).
+   - [X] Exhaustivity check for pattern matching.
+   - [ ] Relax ordering in patterns.
+   - [ ] Wildcard in patterns.
 3. Universes:
    - [ ] Sorts: `Prop`, `Set`, and `Type i`.
    - [ ] Universe subtyping/cumulativity (see [subtyping rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#subtyping-rules)).
