@@ -186,7 +186,7 @@ piforallStyle = Token.LanguageDef
                   ,"Unit", "()"
                   ]
                , Token.reservedOpNames =
-                 ["!","?","\\",":",".",",","<", "=", "+", "-", "*", "^", "()", "_","|","{", "}"]
+                 ["!","?","\\",":",".",",","<", "=", "+", "-", "*", "^", "()", "_","|","{", "}", ":="]
                 }
 tokenizer :: Token.GenTokenParser String [Column] (Unbound.FreshM)
 layout :: forall a t. LParser a -> LParser t -> LParser [a]
@@ -269,8 +269,9 @@ dataDef = do
   try (reserved "data")
   (tName, tType) <- (do
     n <- variable
-    t <- colon >> term
-    reservedOp "="
+    colon
+    t <- expr
+    reservedOp ":="
     return (n, t))
   constructors <- layout constructorDef (return ())
   return $ Data (TypeDecl tName Rel tType) constructors
@@ -279,7 +280,7 @@ dataDef = do
     constructorDef = do
       name <- variable
       colon
-      typ <- term
+      typ <- expr
       return $ TypeDecl name Rel typ
 
     -- telescope :: LParser Telescope

@@ -2,9 +2,9 @@ module Nat where
 import Bool
 
 --{ Features: datatypes:inductive }
-data Nat : Type =
+data Nat : Type :=
   Z : Nat
-  S : (n: Nat) -> Nat
+  S : Nat -> Nat
 
 --{ Features: matching }
 isZero : Nat -> Bool

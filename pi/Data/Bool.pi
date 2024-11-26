@@ -1,7 +1,7 @@
 module Bool where
 
 --{ Features: datatypes }
-data Bool : Type =
+data Bool : Type :=
   True : Bool
   False : Bool
 
