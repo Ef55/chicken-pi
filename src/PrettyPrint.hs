@@ -441,7 +441,7 @@ instance Display Term where
     dr <- case ret of
             Just ret -> withPrec 0 $ display ret
             Nothing -> const PP.empty
-    db <- withPrec 0 $ mapM display cases
+    db <- withPrec 0 $ mapM (display . getBranch) cases
     let top = PP.text "case" <+> ds <+> PP.text "return" <+> dr <+> PP.text "of"
     return $
       parens (levelCase < p) $
@@ -454,7 +454,7 @@ instance Display Arg where
       Rel -> display (unArg arg)
 
 instance Display (Unbound.Bind Pattern Term) where
-  display pat = Unbound.lunbind pat $ \(PatCon (Unbound.Embed cstrName) bindings, branch) ->
+  display pat = Unbound.lunbind pat $ \(PatCon cstrName bindings, branch) ->
     do
       cstr <- display cstrName
       args <- (mapM display bindings)

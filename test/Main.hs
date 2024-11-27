@@ -7,6 +7,7 @@ import Control.Monad.Except
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 import Environment
+import Equal qualified
 import Modules
 import PrettyPrint
 import Syntax
@@ -17,20 +18,24 @@ import Text.ParserCombinators.Parsec.Error
 import Text.PrettyPrint.HughesPJ (render)
 import Text.Regex
 import TypeCheck
+import Unbound.Generics.LocallyNameless (bind, string2Name, Embed (Embed))
 
 main :: IO ()
 main = do
   let dataTests = testGroup "Data" (tcFile ["pi/Data"] <$> ["Unit", "Bool", "Nat"])
+  let matchingTests = testGroup "Matching" (tcFile ["pi/Matching"] <$> ["Subst"])
   let failingTests =
         testGroup
           "Failing"
-          [ failingFile "Non exhaustive pattern matching" ["pi/Failing"] "NonExhaustive" "pattern matching.*2 branches.*3 constructors"
+          [ failingFile "Non exhaustive pattern matching" ["pi/Failing"] "NonExhaustive" "pattern matching.*2 branches.*3 constructors",
+            failingFile "Unordered pattern matching" ["pi/Failing"] "UnorderedPatterns" "Three.*Two was expected"
           ]
   defaultMain $
     testGroup
       "Tests"
       [ -- QC.testProperty "PP-Parsing round trip" prop_roundtrip,
         dataTests,
+        matchingTests,
         failingTests
       ]
 

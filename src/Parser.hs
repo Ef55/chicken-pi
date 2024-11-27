@@ -428,11 +428,11 @@ patternMatching = do
   return $ Case scrutinee ret branches
   where
     branch = do
-      constructor <- variable
+      constructor <- identifier
       bindings <- many variable
       reservedOp "->"
       body <- term
-      return $ Unbound.bind (PatCon (Unbound.Embed constructor) bindings) body
+      return $ Branch $ Unbound.bind (PatCon constructor bindings) body
 
 -- Function types have the syntax '(x:A) -> B'.  This production deals
 -- with the ambiguity caused because these types, annotations and

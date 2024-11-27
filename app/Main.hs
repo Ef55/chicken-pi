@@ -61,6 +61,7 @@ goFilename pathToMainFile = do
   val <- v `exitWith` putParseError
   putStrLn "type checking..."
   let (d, logs) = runTcMonad emptyEnv (tcModules val)
+  mapM_ putStrLn logs
   case d of
     Left err -> putTypeError err
     Right defs -> do

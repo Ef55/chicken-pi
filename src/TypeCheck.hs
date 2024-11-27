@@ -17,20 +17,6 @@ import Text.PrettyPrint.HughesPJ (render, ($$))
 import Unbound.Generics.LocallyNameless (string2Name)
 import Unbound.Generics.LocallyNameless qualified as Unbound
 
-splitAppliedConstructor :: Term -> TcMonad (TName, [Term])
-splitAppliedConstructor term = iter term []
-  where
-    iter :: Term -> [Term] -> TcMonad (TName, [Term])
-    iter term acc = case term of
-      App l (Arg _ r) -> iter l (r : acc)
-      (Var name) -> return (name, acc)
-      _ ->
-        Env.err
-          [ DS "Expected constructor at head",
-            DD term,
-            DS "is not headed by a constructor."
-          ]
-
 ---------------------------------------------------------------------
 
 -- | Infer/synthesize the type of a term
@@ -113,31 +99,34 @@ checkMatch :: Term -> Type -> [Branch] -> TcMonad ()
 checkMatch scrut ret branches = do
   tyS <- inferType scrut
   ret <- Equal.whnf ret
-  (typeConstructor, _) <- splitAppliedConstructor tyS
-  typeConstructor' <- Env.lookupTypeConstructor typeConstructor
-  case typeConstructor' of
-    Just (TypeDecl typeName _ _, constructors) -> do
-      when (length branches /= length constructors) $
-        Env.err
-          [ DS $ "Pattern matching has " ++ show (length branches) ++ " branches, yet the matched type",
-            DD typeName,
-            DS $ "has " ++ show (length constructors) ++ " constructors."
-          ]
-      let branchesCheck = zip constructors branches
-      mapM_
-        ( \(TypeDecl expCstr _ typCstr, branch) -> do
-            (PatCon (Unbound.Embed cstr) xs, body) <- Unbound.unbind branch
-            guard (expCstr == cstr)
-            enterBranch xs typCstr $ checkType body ret
-        )
-        branchesCheck
-    Nothing ->
-      Env.err
-        [ DD scrut,
-          DS "is headed by",
-          DD typeConstructor,
-          DS "which is not a type constructor"
-        ]
+  (TypeDecl typeName _ _, constructors) <-
+    Equal.unconstruct tyS
+      >>= \(m, _) -> do
+        m' <- Env.lookupTypeConstructor m
+        case m' of
+          Nothing -> Env.err [DD m, DS "is not a type constructor" ]
+          Just d -> return d
+  when (length branches /= length constructors) $
+    Env.err
+      [ DS $ "Pattern matching has " ++ show (length branches) ++ " branches, yet the matched type",
+        DD typeName,
+        DS $ "has " ++ show (length constructors) ++ " constructors."
+      ]
+  let branchesCheck = zip constructors branches
+  mapM_
+    ( \(TypeDecl expCstr _ typCstr, branch) -> do
+        (PatCon cstr xs, body) <- Unbound.unbind (getBranch branch)
+        when (expCstr /= string2Name cstr) $
+          Env.err
+            [ DS "Pattern is headed by",
+              DD cstr,
+              DS "but constructor",
+              DD expCstr,
+              DS "was expected."
+            ]
+        enterBranch xs typCstr $ checkType body ret
+    )
+    branchesCheck
   where
     enterBranch :: [TName] -> Term -> TcMonad a -> TcMonad a
     enterBranch names typ k = do
@@ -399,7 +388,7 @@ tcConstructor dat@(TypeDecl dataTypeName _ _) (TypeDecl name _ cstrType) = do
         -- And once the tail is reached
         _ -> do
           -- Extract the head
-          (name, _) <- splitAppliedConstructor typ'
+          (name, _) <- Equal.unconstruct typ'
           -- which must by the type being defined.
           if name == dataTypeName
             then return ()

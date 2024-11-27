@@ -1,0 +1,22 @@
+module Subst where
+
+data Data: Type :=
+  One : Data
+  Two : Data
+
+data Data': Type :=
+  One' : Data'
+  Two' : Data'
+
+test : Data -> Data'
+test = \d .
+  let o = One' in
+  let t = Two' in
+  case d of
+    One -> o
+    Two -> t
+
+eval : (d: Data) -> (test d) = (case d of
+                                  One -> One'
+                                  Two -> Two')
+eval = \d . Refl
