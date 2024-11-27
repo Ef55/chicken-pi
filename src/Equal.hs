@@ -39,9 +39,6 @@ equate t1 t2 = do
 
     (TrustMe, TrustMe) ->  return ()
     (PrintMe, PrintMe) ->  return ()
-    
-    (TyUnit, TyUnit)   -> return ()
-    (LitUnit, LitUnit) -> return ()
       
     (Let rhs1 bnd1, Let rhs2 bnd2) -> do
       (x, body1, body2) <- unbind2 bnd1 bnd2

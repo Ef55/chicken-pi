@@ -55,10 +55,7 @@ instance Arbitrary (Unbound.Name a) where
 
 -- Terms with no subterms
 base :: Gen Term
-base = elements [TyType, TrustMe, PrintMe,
-                tyUnit, litUnit, Refl  ]
-    where tyUnit = TyUnit
-          litUnit = LitUnit
+base = elements [TyType, TrustMe, PrintMe, Refl  ]
 
 -- Generate a random term
 -- In the inner recursion, the bool prevents the generation of TyCon/DataCon applications 

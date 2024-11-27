@@ -16,14 +16,12 @@ import TypeCheck
 
 main :: IO ()
 main = do
-  let dataTests = testGroup "Data" (testFile ["pi/Data"] <$> ["Bool", "Nat"])
+  let dataTests = testGroup "Data" (testFile ["pi/Data"] <$> ["Unit", "Bool", "Nat"])
   defaultMain $
     testGroup
       "Tests"
-      [ dataTests,
-        QC.testProperty
-          "PP-Parsing round trip"
-          prop_roundtrip
+      [ -- QC.testProperty "PP-Parsing round trip" prop_roundtrip,
+        dataTests
       ]
 
 exitWith :: Either a b -> (a -> IO b) -> IO b

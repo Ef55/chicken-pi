@@ -352,8 +352,6 @@ instance Display Term where
     return $ PP.text "TRUSTME"
   display PrintMe = do
     return $ PP.text "PRINTME"
-  display TyUnit = return $ PP.text "Unit"
-  display LitUnit = return $ PP.text "()"
   display (TySigma tyA bnd) =
     Unbound.lunbind bnd $ \(x, tyB) -> do
       if x `elem` toListOf Unbound.fv tyB

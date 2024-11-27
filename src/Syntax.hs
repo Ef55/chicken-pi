@@ -65,10 +65,6 @@ data Term
   | -- | let expression, introduces a new (non-recursive) definition in the ctx
     -- | `let x = a in b`
     Let Term (Unbound.Bind TName Term)
-  | -- | the type with a single inhabitant, called `Unit`
-    TyUnit
-  | -- | the inhabitant of `Unit`, written `()`
-    LitUnit
   | -- | Sigma-type (homework), written `{ x : A | B }`  
     TySigma Term (Unbound.Bind TName Term)
   | -- | introduction form for Sigma-types `( a , b )`

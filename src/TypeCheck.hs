@@ -81,9 +81,6 @@ inferType a = case a of
   (Pos p a) ->
     Env.extendSourceLocation p a $ inferType a
   -- Extensions to the core language
-  -- i-unit
-  TyUnit -> return TyType
-  LitUnit -> return TyUnit
 
   -- i-sigma
   (TySigma tyA bnd) -> do
