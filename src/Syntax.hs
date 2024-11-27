@@ -69,12 +69,6 @@ data Term
     TyUnit
   | -- | the inhabitant of `Unit`, written `()`
     LitUnit
-  | -- | the type with two inhabitants (homework) `Bool`
-    TyBool
-  | -- | `True` and `False`
-    LitBool Bool
-  | -- | `if a then b1 else b2` expression for eliminating booleans
-    If Term Term Term
   | -- | Sigma-type (homework), written `{ x : A | B }`  
     TySigma Term (Unbound.Bind TName Term)
   | -- | introduction form for Sigma-types `( a , b )`
@@ -300,17 +294,6 @@ idy = Lam Rel (Unbound.bind yName (Var yName))
 instance Unbound.Subst Term Term where
   isvar (Var x) = Just (Unbound.SubstName x)
   isvar _ = Nothing
-
-
--- '(y : x) -> y'
-pi1 :: Term 
-pi1 = TyPi Rel (Var xName) (Unbound.bind yName (Var yName))
-
--- '(y : Bool) -> y'
-pi2 :: Term 
-pi2 = TyPi Rel TyBool (Unbound.bind yName (Var yName))
-
--- >>> Unbound.aeq (Unbound.subst xName TyBool pi1) pi2
 
 -----------------
 

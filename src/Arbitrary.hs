@@ -56,13 +56,9 @@ instance Arbitrary (Unbound.Name a) where
 -- Terms with no subterms
 base :: Gen Term
 base = elements [TyType, TrustMe, PrintMe,
-                tyUnit, litUnit, tyBool,
-                litTrue, litFalse, Refl  ]
+                tyUnit, litUnit, Refl  ]
     where tyUnit = TyUnit
           litUnit = LitUnit
-          tyBool = TyBool
-          litTrue = LitBool True
-          litFalse = LitBool False
 
 -- Generate a random term
 -- In the inner recursion, the bool prevents the generation of TyCon/DataCon applications 
@@ -83,7 +79,6 @@ genTerm n
               (1, Subst <$> go True n' <*> go True n'),
               (1, Contra <$> go True n'),
               
-              (1, If <$> genTerm n' <*> genTerm n' <*> genTerm n'),
               (1, genSigma n'),
               (1, Prod <$> genTerm n' <*> genTerm n'),
               (1, genLetPair n'),

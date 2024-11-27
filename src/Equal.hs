@@ -42,15 +42,6 @@ equate t1 t2 = do
     
     (TyUnit, TyUnit)   -> return ()
     (LitUnit, LitUnit) -> return ()
-    
-    (TyBool, TyBool)   -> return ()
-    
-    (LitBool b1, LitBool b2) | b1 == b2 -> return ()
-    
-    (If a1 b1 c1, If a2 b2 c2) -> do
-      equate a1 a2
-      equate b1 b2 
-      equate c1 c2
       
     (Let rhs1 bnd1, Let rhs2 bnd2) -> do
       (x, body1, body2) <- unbind2 bnd1 bnd2
@@ -135,12 +126,6 @@ whnf (App t1 t2) = do
       whnf (instantiate bnd (unArg t2) )
     _ -> do
       return (App nf t2)
-      
-whnf (If t1 t2 t3) = do
-  nf <- whnf t1
-  case nf of 
-    (LitBool bo) -> if bo then whnf t2 else whnf t3
-    _ -> return (If nf t2 t3)
 
 whnf (LetPair a bnd) = do
   nf <- whnf a 
@@ -215,7 +200,6 @@ unify ns tx ty = do
 -- solutions.
 amb :: Term -> Bool
 amb (App t1 t2) = True
-amb If {} = True
 amb (LetPair _ _) = True 
  
 amb (Subst _ _) = True 

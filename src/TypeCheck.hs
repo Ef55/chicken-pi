@@ -84,16 +84,6 @@ inferType a = case a of
   -- i-unit
   TyUnit -> return TyType
   LitUnit -> return TyUnit
-  -- i-bool
-  TyBool -> return TyType
-  -- i-true/false
-  (LitBool _) -> return TyBool
-  -- i-if
-  (If a b1 b2) -> do
-    checkType a TyBool
-    tyA <- inferType b1
-    checkType b2 tyA
-    return tyA
 
   -- i-sigma
   (TySigma tyA bnd) -> do
@@ -216,14 +206,6 @@ checkType tm ty = do
           DD ty'
         ]
 
-    -- Extensions to the core language
-    -- c-if
-    (If a b1 b2) -> do
-      checkType a TyBool
-      dtrue <- Equal.unify [] a (LitBool True)
-      dfalse <- Equal.unify [] a (LitBool False)
-      Env.extendCtxs dtrue $ checkType b1 ty'
-      Env.extendCtxs dfalse $ checkType b2 ty'
     -- c-prod
     (Prod a b) -> do
       case ty' of
@@ -284,10 +266,8 @@ checkType tm ty = do
         _ -> Env.err [DS "Contra requires an equality type, not", DD ty']
       a' <- Equal.whnf a
       b' <- Equal.whnf b
+      -- TODO: extend to datatypes
       case (a', b') of
-        (LitBool b1, LitBool b2)
-          | b1 /= b2 ->
-              return ()
         (_, _) ->
           Env.err
             [ DS "I can't tell that",

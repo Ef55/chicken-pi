@@ -354,21 +354,6 @@ instance Display Term where
     return $ PP.text "PRINTME"
   display TyUnit = return $ PP.text "Unit"
   display LitUnit = return $ PP.text "()"
-  display TyBool = return $ PP.text "Bool"
-  display (LitBool b) = return $ if b then PP.text "True" else PP.text "False"
-  display (If a b c) = do
-    p <- ask prec
-    da <- withPrec 0 $ display a
-    db <- withPrec 0 $ display b
-    dc <- withPrec 0 $ display c
-    return $
-      parens (levelIf < p) $
-        PP.text "if"
-          <+> da
-          <+> PP.text "then"
-          <+> db
-          <+> PP.text "else"
-          <+> dc
   display (TySigma tyA bnd) =
     Unbound.lunbind bnd $ \(x, tyB) -> do
       if x `elem` toListOf Unbound.fv tyB

@@ -371,7 +371,6 @@ factor = choice [ Var <$> variable <?> "a variable"
                                   , impProd    <?> "an implicit function type"
                   
                 , bconst     <?> "a constant"
-                , ifExpr     <?> "an if expression"
                 , sigmaTy    <?> "a sigma type"
 
                 , expProdOrAnnotOrParens
@@ -407,18 +406,6 @@ lambda = do reservedOp "\\"
 bconst  :: LParser Term
 bconst = choice [reserved "Unit"   >> return TyUnit,
                  reserved "()"    >> return LitUnit]
-
-
-ifExpr :: LParser Term
-ifExpr =
-  do reserved "if"
-     a <- expr
-     reserved "then"
-     b <- expr
-     reserved "else"
-     c <- expr
-     return (If a b c )
-
 
 -- 
 letExpr :: LParser Term
