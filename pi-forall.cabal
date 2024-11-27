@@ -40,7 +40,8 @@ common shared-properties
     filepath,
     HUnit,
     QuickCheck,
-    tasty, tasty-hunit, tasty-quickcheck
+    tasty, tasty-hunit, tasty-quickcheck,
+    regex-compat
   if !impl(ghc >= 8.0)
     build-depends: semigroups       
  

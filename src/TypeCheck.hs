@@ -116,16 +116,20 @@ checkMatch scrut ret branches = do
   (typeConstructor, _) <- splitAppliedConstructor tyS
   typeConstructor' <- Env.lookupTypeConstructor typeConstructor
   case typeConstructor' of
-    Just (_, constructors) -> do
-      guard (length branches == length constructors)
+    Just (TypeDecl typeName _ _, constructors) -> do
+      when (length branches /= length constructors) $
+        Env.err
+          [ DS $ "Pattern matching has " ++ show (length branches) ++ " branches, yet the matched type",
+            DD typeName,
+            DS $ "has " ++ show (length constructors) ++ " constructors."
+          ]
       let branchesCheck = zip constructors branches
-      foldM_
-        ( \_ (TypeDecl expCstr _ typCstr, branch) -> do
+      mapM_
+        ( \(TypeDecl expCstr _ typCstr, branch) -> do
             (PatCon (Unbound.Embed cstr) xs, body) <- Unbound.unbind branch
             guard (expCstr == cstr)
             enterBranch xs typCstr $ checkType body ret
         )
-        ()
         branchesCheck
     Nothing ->
       Env.err
