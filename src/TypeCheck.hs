@@ -106,49 +106,61 @@ inferType a = case a of
     aTy <- inferType a
     checkType b aTy
     return TyType
-  (Case scrut ret branches) -> do
-    tyS <- inferType scrut
-    ret <- Equal.whnf ret
-    (typeConstructor, _) <- splitAppliedConstructor tyS
-    Just (_, constructors) <- Env.lookupTypeConstructor typeConstructor
-    guard (length branches == length constructors)
-    let branchesCheck = zip constructors branches
-    foldM_
-      ( \_ (TypeDecl expCstr _ typCstr, branch) -> do
-          (PatCon (Unbound.Embed cstr) xs, body) <- Unbound.unbind branch
-          guard (expCstr == cstr)
-          enterBranch xs typCstr $ checkType body ret
-      )
-      ()
-      branchesCheck
+  (Case scrut (Just ret) branches) -> do
+    checkMatch scrut ret branches
     return ret
-
+  (Case _ Nothing _) ->
+    Env.err
+      [ DS "In",
+        DD a,
+        DS "cannot infer typ of pattern matching without `return` clause"
+      ]
   -- cannot synthesize the type of the term
   _ ->
     Env.err [DS "Must have a type annotation for", DD a]
 
-enterBranch :: [TName] -> Term -> TcMonad a -> TcMonad a
-enterBranch names typ k = do
-  -- TODO: ensure that typ is already normalized in context
-  typ' <- Equal.whnf typ
-  case (names, typ') of
-    (n : ns, TyPi eps a bnd) -> do
-      let b = instantiate bnd (Var n)
-      Env.extendCtx (Decl $ TypeDecl n eps a) $ enterBranch ns b k
-    -- TODO: errors
-    ([], TyPi _ _ _) ->
-      Env.err
-        [ DS "Unbound argument in pattern:",
-          DD typ',
-          DS "should be fully introduced."
-        ]
-    (n : _, _) ->
-      Env.err
-        [ DS "Too many arguments in pattern:",
-          DD n,
-          DS "is the first unused name."
-        ]
-    (_, _) -> k
+-------------------------------------------------------------------------
+
+-- | Typecheck a pattern-matching construct
+checkMatch :: Term -> Type -> [Branch] -> TcMonad ()
+checkMatch scrut ret branches = do
+  tyS <- inferType scrut
+  ret <- Equal.whnf ret
+  (typeConstructor, _) <- splitAppliedConstructor tyS
+  Just (_, constructors) <- Env.lookupTypeConstructor typeConstructor
+  guard (length branches == length constructors)
+  let branchesCheck = zip constructors branches
+  foldM_
+    ( \_ (TypeDecl expCstr _ typCstr, branch) -> do
+        (PatCon (Unbound.Embed cstr) xs, body) <- Unbound.unbind branch
+        guard (expCstr == cstr)
+        enterBranch xs typCstr $ checkType body ret
+    )
+    ()
+    branchesCheck
+  where
+    enterBranch :: [TName] -> Term -> TcMonad a -> TcMonad a
+    enterBranch names typ k = do
+      -- TODO: ensure that typ is already normalized in context
+      typ' <- Equal.whnf typ
+      case (names, typ') of
+        (n : ns, TyPi eps a bnd) -> do
+          let b = instantiate bnd (Var n)
+          Env.extendCtx (Decl $ TypeDecl n eps a) $ enterBranch ns b k
+        -- TODO: errors
+        ([], TyPi _ _ _) ->
+          Env.err
+            [ DS "Unbound argument in pattern:",
+              DD typ',
+              DS "should be fully introduced."
+            ]
+        (n : _, _) ->
+          Env.err
+            [ DS "Too many arguments in pattern:",
+              DD n,
+              DS "is the first unused name."
+            ]
+        (_, _) -> k
 
 -------------------------------------------------------------------------
 
@@ -276,6 +288,9 @@ checkType tm ty = do
               DS "are contradictory"
             ]
 
+    -- We only check the type if the pattern matching has no return clause.
+    -- Otherwise, we can just le it be handled by inferType.
+    (Case scrut Nothing branches) -> checkMatch scrut ty' branches
     -- c-infer
     _ -> do
       tyA <- inferType tm

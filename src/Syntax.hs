@@ -40,6 +40,8 @@ type TName = Unbound.Name Term
 -- as a type or as a term.
 type Type = Term
 
+type Branch = Unbound.Bind Pattern Term
+
 -- | basic language
 data Term
   = -- | type of types, concretely `Type`
@@ -88,7 +90,7 @@ data Term
   | -- | witness to an equality contradiction
     Contra Term
   | -- | pattern matching
-    Case Term Term [Unbound.Bind Pattern Term]
+    Case Term (Maybe Term) [Branch]
 
   deriving (Show, Generic)
 

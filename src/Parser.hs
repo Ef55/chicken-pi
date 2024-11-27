@@ -463,8 +463,7 @@ patternMatching :: LParser Term
 patternMatching = do
   reserved "case"
   scrutinee <- term
-  reserved "return"
-  ret <- term
+  ret <- Just <$> try (reserved "return" >> term) <|> pure Nothing
   reserved "of"
   branches <- layout branch (return ())
   return $ Case scrutinee ret branches

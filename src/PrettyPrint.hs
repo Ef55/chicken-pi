@@ -455,7 +455,9 @@ instance Display Term where
   display (Case scrut ret cases) = do
     p <- asks prec
     ds <- withPrec 0 $ display scrut
-    dr <- withPrec 0 $ display ret
+    dr <- case ret of
+            Just ret -> withPrec 0 $ display ret
+            Nothing -> const PP.empty
     db <- withPrec 0 $ mapM display cases
     let top = PP.text "case" <+> ds <+> PP.text "return" <+> dr <+> PP.text "of"
     return $

@@ -7,11 +7,12 @@ data Bool : Type :=
 
 --{ Features: matching }
 and : Bool -> Bool -> Bool
-and = \l r . case l return Bool of
+and = \l r . case l of
   True -> r
   False -> False
 
+--{ Features: matching:return }
 or : Bool -> Bool -> Bool
-or = \ l r . case l return Bool of
+or = \ l r . case l of
   True -> True
   False -> r
