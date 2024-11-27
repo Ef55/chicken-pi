@@ -1,31 +1,41 @@
 module Main where
 
-import Test.QuickCheck
-import Test.HUnit
-import Environment
-import PrettyPrint
-import TypeCheck
-import Syntax
+import Arbitrary (prop_roundtrip)
 import Control.Monad.Except
+import Data.List (intercalate)
+import Environment
 import Modules
+import PrettyPrint
+import Syntax
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck as QC
+import Text.ParserCombinators.Parsec.Error
 import Text.PrettyPrint.HughesPJ (render)
-import Text.ParserCombinators.Parsec.Error 
-import Test.QuickCheck
-import Arbitrary
+import TypeCheck
 
 main :: IO ()
 main = do
-   quickCheck prop_roundtrip
+  let dataTests = testGroup "Data" (testFile ["pi/Data"] <$> ["Bool", "Nat"])
+  defaultMain $
+    testGroup
+      "Tests"
+      [ dataTests,
+        QC.testProperty
+          "PP-Parsing round trip"
+          prop_roundtrip
+      ]
 
 exitWith :: Either a b -> (a -> IO b) -> IO b
 exitWith (Left a) f = f a
 exitWith (Right b) f = return b
 
--- | Type check the given file    
-testFile :: String -> Test  
-testFile name = name ~: TestCase $ do
-  v <- runExceptT (getModules ["pi"] name)
+-- | Type check the given file
+testFile :: [String] -> String -> TestTree
+testFile path name = testCase name $ do
+  v <- runExceptT (getModules path name)
   val <- v `exitWith` (\b -> assertFailure $ "Parse error: " ++ render (disp b))
-  d <- runTcMonad emptyEnv (tcModules val)
-  defs <- d `exitWith` (\s -> assertFailure $ "Type error:" ++ render (disp s))
-  putStrLn $ render $ disp (last defs)
+  case runTcMonad emptyEnv (tcModules val) of
+    (Left err, _) -> assertFailure $ "Type error:" ++ render (disp err)
+    (_, logs@(_ : _)) -> assertFailure $ "Warnings were produced:" ++ intercalate "\n" logs
+    (Right defs, _) -> return ()

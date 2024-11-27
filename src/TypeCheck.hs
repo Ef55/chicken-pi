@@ -127,17 +127,26 @@ checkMatch scrut ret branches = do
   tyS <- inferType scrut
   ret <- Equal.whnf ret
   (typeConstructor, _) <- splitAppliedConstructor tyS
-  Just (_, constructors) <- Env.lookupTypeConstructor typeConstructor
-  guard (length branches == length constructors)
-  let branchesCheck = zip constructors branches
-  foldM_
-    ( \_ (TypeDecl expCstr _ typCstr, branch) -> do
-        (PatCon (Unbound.Embed cstr) xs, body) <- Unbound.unbind branch
-        guard (expCstr == cstr)
-        enterBranch xs typCstr $ checkType body ret
-    )
-    ()
-    branchesCheck
+  typeConstructor' <- Env.lookupTypeConstructor typeConstructor
+  case typeConstructor' of
+    Just (_, constructors) -> do
+      guard (length branches == length constructors)
+      let branchesCheck = zip constructors branches
+      foldM_
+        ( \_ (TypeDecl expCstr _ typCstr, branch) -> do
+            (PatCon (Unbound.Embed cstr) xs, body) <- Unbound.unbind branch
+            guard (expCstr == cstr)
+            enterBranch xs typCstr $ checkType body ret
+        )
+        ()
+        branchesCheck
+    Nothing ->
+      Env.err
+        [ DD scrut,
+          DS "is headed by",
+          DD typeConstructor,
+          DS "which is not a type constructor"
+        ]
   where
     enterBranch :: [TName] -> Term -> TcMonad a -> TcMonad a
     enterBranch names typ k = do
@@ -309,8 +318,6 @@ tcModules = foldM tcM []
     -- Check module m against modules in defs, then add m to the list.
     defs `tcM` m = do
       -- "M" is for "Module" not "monad"
-      let name = moduleName m
-      liftIO $ putStrLn $ "Checking module " ++ show name
       m' <- defs `tcModule` m
       return $ defs ++ [m']
 

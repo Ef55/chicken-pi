@@ -117,7 +117,6 @@ liftError (Right a) = return a
 -- | Parse a module declaration from the given filepath.
 parseModuleFile :: (MonadError ParseError m, MonadIO m) => String -> m Module
 parseModuleFile name = do
-  liftIO $ putStrLn $ "Parsing File " ++ show name
   contents <- liftIO $ readFile name
   liftError $ Unbound.runFreshM 
      (runParserT (do { whiteSpace; v <- moduleDef;eof; return v}) [] name contents)

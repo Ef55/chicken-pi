@@ -48,20 +48,27 @@ import PrettyPrint (D (..), Disp (..), Doc, SourcePos, render)
 import Syntax
 import Text.PrettyPrint.HughesPJ (nest, sep, text, vcat, ($$))
 import Unbound.Generics.LocallyNameless qualified as Unbound
+import Control.Monad.Identity
+import Control.Monad.Trans.Writer (WriterT (runWriterT))
+import Control.Monad.RWS (MonadWriter, tell)
 
 -- | The type checking Monad includes a reader (for the
 -- environment), freshness state (for supporting locally-nameless
 -- representations), error (for error reporting), and IO
 -- (for e.g.  warning messages).
-type TcMonad = Unbound.FreshMT (ReaderT Env (ExceptT Err IO))
+type TcMonad = Unbound.FreshMT (ReaderT Env (ExceptT Err (WriterT [String] Identity)))
 
 -- | Entry point for the type checking monad, given an
 -- initial environment, returns either an error message
 -- or some result.
-runTcMonad :: Env -> TcMonad a -> IO (Either Err a)
+runTcMonad :: Env -> TcMonad a -> (Either Err a, [String])
 runTcMonad env m =
-  runExceptT $
-    runReaderT (Unbound.runFreshMT m) env
+  let m1 = Unbound.runFreshMT m
+      m2 = runReaderT m1 env
+      m3 = runExceptT m2
+      m4 = runWriterT m3
+      m5 = runIdentity m4
+  in m5
 
 -- | Marked locations in the source code
 data SourceLocation where
@@ -300,10 +307,10 @@ err d = do
   throwError $ Err loc (sep $ map disp d)
 
 -- | Print a warning
-warn :: (Disp a, MonadReader Env m, MonadIO m) => a -> m ()
+warn :: (Disp a, MonadReader Env m, MonadWriter [String] m) => a -> m ()
 warn e = do
   loc <- getSourceLocation
-  liftIO $ putStrLn $ "warning: " ++ render (disp (Err loc (disp e)))
+  tell ["warning: " ++ render (disp (Err loc (disp e)))]
 
 checkStage ::
   (MonadReader Env m, MonadError Err m) =>
