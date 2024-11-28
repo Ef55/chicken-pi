@@ -10,7 +10,7 @@ data Nat : Type :=
 isZero : Nat -> Bool
 isZero = \n . case n of
   Z -> True
-  S n' -> False
+  S _ -> False
 
 --{ Features: matching, recursive }
 plus : Nat -> Nat -> Nat

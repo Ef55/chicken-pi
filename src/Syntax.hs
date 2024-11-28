@@ -3,6 +3,7 @@
 module Syntax where
 
 import Data.Function (on)
+import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set

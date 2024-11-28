@@ -194,6 +194,12 @@ variable =
     i <- identifier
     return $ Unbound.string2Name i
 
+wildcard :: LParser TName
+wildcard = reservedOp "_" >> return wildcardName
+
+varOrWildcard :: LParser TName
+varOrWildcard = try wildcard <|> variable
+
 colon, dot, comma :: LParser ()
 colon = Token.colon tokenizer >> return ()
 dot = Token.dot tokenizer >> return ()
@@ -357,8 +363,8 @@ factor =
 
 impOrExpVar :: LParser (TName, Epsilon)
 impOrExpVar =
-  try ((,Irr) <$> (brackets variable))
-    <|> (,Rel) <$> variable
+  try ((,Irr) <$> (brackets varOrWildcard))
+    <|> (,Rel) <$> varOrWildcard
 
 typen :: LParser Term
 typen =
@@ -429,7 +435,7 @@ patternMatching = do
   where
     branch = do
       constructor <- identifier
-      bindings <- many variable
+      bindings <- many varOrWildcard
       reservedOp "->"
       body <- term
       return $ Branch $ Unbound.bind (PatCon constructor bindings) body

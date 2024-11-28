@@ -16,7 +16,7 @@ Note that these should not necessarily be done in order.
    - [X] Pattern matching (without `as`, `in` ~and `return`~).
    - [X] Exhaustivity check for pattern matching.
    - [ ] Relax ordering in patterns.
-   - [ ] Wildcard in patterns.
+   - [X] Wildcard in patterns.
 3. Universes:
    - [ ] Sorts: `Prop`, `Set`, and `Type i`.
    - [ ] Universe subtyping/cumulativity (see [subtyping rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#subtyping-rules)).
