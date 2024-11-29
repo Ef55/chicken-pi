@@ -123,18 +123,24 @@ lookupTyMaybe v = do
   go ctx
   where
     go :: [Entry] -> m (Maybe TypeDecl)
-    go (Decl sig : ctx)
-      | v == declName sig = return $ Just sig
-      | otherwise = go ctx
+    go (Decl sig : ctx) = do
+      let r1 = testDecl sig
+      r2 <- go ctx
+      return $ r1 <|> r2
     go (Demote ep : ctx) = do
       r <- go ctx
       return $ demoteDecl ep <$> r
-    go (dat@(Data typ constructors) : ctx) = do
-      r1 <- lookupConstructor AnyConstructor v
-      r2 <- go ctx
-      return (r1 <|> r2)
+    go (dat@(Data dt constructors) : ctx) = do
+      let r1 = testDecl dt
+          r2 = foldl (\acc c -> acc <|> testDecl c) Nothing constructors
+      r3 <- go ctx
+      return $ r1 <|> r2 <|> r3
     go (_ : ctx) = go ctx
     go [] = return Nothing
+
+    testDecl :: TypeDecl -> Maybe TypeDecl
+    testDecl decl =
+      if v == declName decl then Just decl else Nothing
 
 demoteDecl :: Epsilon -> TypeDecl -> TypeDecl
 demoteDecl ep s = s {declEp = min ep (declEp s)}
@@ -165,13 +171,7 @@ lookupDef v = do
   ctx <- asks ctx
   return $ listToMaybe [a | Def v' a <- ctx, v == v']
 
--- | Find a constructor's declaration
-data ConstructorKind
-  = TypeConstructor
-  | TermConstructor
-  | AnyConstructor
-  deriving Eq
-
+-- | Find a datatype's declaration
 lookupTypeConstructor ::
   (MonadReader Env m) =>
   TName ->
@@ -186,36 +186,6 @@ lookupTypeConstructor name = do
       | otherwise = go ctx
     go (_ : ctx) = go ctx
     go [] = Nothing
-
-lookupConstructor ::
-  (MonadReader Env m) =>
-  ConstructorKind ->
-  TName ->
-  m (Maybe TypeDecl)
-lookupConstructor kind name = do
-  ctx <- asks ctx
-  return $ go ctx
-  where
-    go :: [Entry] -> Maybe TypeDecl
-    go (Data typ constructors : ctx)
-      | name == declName typ && kind /= TermConstructor = Just typ
-      | otherwise =
-          (if kind /= TypeConstructor then goCstr constructors else Nothing)
-            <|> go ctx
-    go (_ : ctx) = go ctx
-    go [] = Nothing
-
-    goCstr :: [TypeDecl] -> Maybe TypeDecl
-    goCstr (decl@(TypeDecl name' _ _) : cstrs)
-      | name == name' = Just decl
-      | otherwise = goCstr cstrs
-    goCstr [] = Nothing
-
--- lookupConstructors ::
---   (MonadReader Env m) =>
---   TName ->
---   m (Maybe [Constructor])
--- lookupConstructors kind name = lookupConstructor TypeConstructor name
 
 -- | Extend the context with a new entry
 extendCtx :: (MonadReader Env m) => Entry -> m a -> m a

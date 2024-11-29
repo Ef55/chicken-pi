@@ -161,7 +161,7 @@ whnf (Case s r branches) = do
   ns <- whnf s
   sb <- pickBranch ns branches
   case sb of
-    Just (_, b) -> whnf b
+    Just (b, s) -> whnf $ Unbound.substs s b
     Nothing -> return $ Case ns r branches 
 
 -- ignore/remove type annotations and source positions when normalizing
@@ -179,26 +179,28 @@ whnf (Subst tm pf) = do
 -- don't do anything special for them
 whnf tm = return tm
 
+-- | Looks for a matching branch in a list of branch, in order.
+-- If a match is found, return the body of the matched branch, as well as
+-- the (set of) bindings defined in the pattern.
 pickBranch ::
   forall m.
   (MonadError Err m, MonadReader Env m, Unbound.Fresh m) =>
   Term ->
   [Branch] ->
-  m (Maybe ([(TName, Term)], Term))
+  m (Maybe (Term, [(TName, Term)]))
 pickBranch s branches = do
   c <- unconstruct s
   r <- mapM (tryBranch c) branches
   return $ foldl (<|>) Nothing r
   where
-    tryBranch :: (TName, [Term]) -> Branch -> m (Maybe ([(TName, Term)], Term))
+    tryBranch :: (TName, [Term]) -> Branch -> m (Maybe (Term, [(TName, Term)]))
     tryBranch (constructor, args) bnd = do
       (PatCon cstr params, b) <- Unbound.unbind (getBranch bnd)
       let subst = zip params args
-          res = Unbound.substs subst b
       return $
         if constructor == Unbound.string2Name cstr
           && length params == length args
-          then Just (subst, res)
+          then Just (b, subst)
           else Nothing
 
 -- | 'Unify' the two terms, producing a list of definitions that
@@ -250,6 +252,7 @@ amb :: Term -> Bool
 amb (App t1 t2) = True
 amb (LetPair _ _) = True
 amb (Subst _ _) = True
+-- (Case _ _ _) = True ???
 amb _ = False
 
 -------------------------------------------------------
