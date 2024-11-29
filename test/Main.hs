@@ -23,7 +23,7 @@ import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
 main :: IO ()
 main = do
   let dataTests = testGroup "Data" (tcFile ["pi/Data"] <$> ["Unit", "Bool", "Nat"])
-  let matchingTests = testGroup "Matching" (tcFile ["pi/Matching"] <$> ["Subst", "Wildcard"])
+  let matchingTests = testGroup "Matching" (tcFile ["pi/Matching"] <$> ["Subst", "Eval", "Wildcard"])
   let failingTests =
         testGroup
           "Failing"

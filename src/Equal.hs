@@ -9,6 +9,7 @@ module Equal
   )
 where
 
+import Control.Monad (guard, when)
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.Except
   ( MonadError,
@@ -17,12 +18,11 @@ import Control.Monad.Except
     zipWithM_,
   )
 import Control.Monad.RWS (MonadReader)
-import Data.Map as Map
 import Environment (D (DD, DS), Env, Err, TcMonad)
 import Environment qualified as Env
+import GHC.Base (Alternative ((<|>)))
 import Syntax
 import Unbound.Generics.LocallyNameless qualified as Unbound
-import Control.Monad (when)
 
 -- | compare two expressions for equality
 -- first check if they are alpha equivalent then
@@ -78,15 +78,18 @@ equate t1 t2 = do
     (Case s1 _ b1s, Case s2 _ b2s) -> do
       equate s1 s2
       when (length b1s /= length b2s) (tyErr n1 n2)
-      mapM_ (\(bn1, bn2) -> do
-        m <- Unbound.unbind2 (getBranch bn1) (getBranch bn2)
-        case m of
-            Nothing -> do
-              -- b1 <- Unbound.unbind (getBranch bn1)
-              -- b2 <- Unbound.unbind (getBranch bn2)
-              -- tyErr (fst b1) (fst b2)
-              tyErr n1 n2
-            Just (_, b1, _, b2) -> equate b1 b2) (zip b1s b2s)
+      mapM_
+        ( \(bn1, bn2) -> do
+            m <- Unbound.unbind2 (getBranch bn1) (getBranch bn2)
+            case m of
+              Nothing -> do
+                -- b1 <- Unbound.unbind (getBranch bn1)
+                -- b2 <- Unbound.unbind (getBranch bn2)
+                -- tyErr (fst b1) (fst b2)
+                tyErr n1 n2
+              Just (_, b1, _, b2) -> equate b1 b2
+        )
+        (zip b1s b2s)
     (_, _) -> tyErr n1 n2
   where
     tyErr n1 n2 = do
@@ -154,6 +157,12 @@ whnf (LetPair a bnd) = do
     Prod b1 c -> do
       whnf (Unbound.instantiate bnd [b1, c])
     _ -> return (LetPair nf bnd)
+whnf (Case s r branches) = do
+  ns <- whnf s
+  sb <- pickBranch ns branches
+  case sb of
+    Just (_, b) -> whnf b
+    Nothing -> return $ Case ns r branches 
 
 -- ignore/remove type annotations and source positions when normalizing
 whnf (Ann tm _) = whnf tm
@@ -169,6 +178,28 @@ whnf (Subst tm pf) = do
 -- all other terms are already in WHNF
 -- don't do anything special for them
 whnf tm = return tm
+
+pickBranch ::
+  forall m.
+  (MonadError Err m, MonadReader Env m, Unbound.Fresh m) =>
+  Term ->
+  [Branch] ->
+  m (Maybe ([(TName, Term)], Term))
+pickBranch s branches = do
+  c <- unconstruct s
+  r <- mapM (tryBranch c) branches
+  return $ foldl (<|>) Nothing r
+  where
+    tryBranch :: (TName, [Term]) -> Branch -> m (Maybe ([(TName, Term)], Term))
+    tryBranch (constructor, args) bnd = do
+      (PatCon cstr params, b) <- Unbound.unbind (getBranch bnd)
+      let subst = zip params args
+          res = Unbound.substs subst b
+      return $
+        if constructor == Unbound.string2Name cstr
+          && length params == length args
+          then Just (subst, res)
+          else Nothing
 
 -- | 'Unify' the two terms, producing a list of definitions that
 -- must hold for the terms to be equal
