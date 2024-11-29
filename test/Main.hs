@@ -30,7 +30,10 @@ main = do
           "Failing"
           [ failingFile "Non exhaustive pattern matching" ["test/Failing"] "NonExhaustive" "pattern matching.*2 branches.*3 constructors",
             failingFile "Unordered pattern matching" ["test/Failing"] "UnorderedPatterns" "Three.*Two was expected",
-            failingFile "Wildcard is not a variable" ["test/Failing"] "WildcardVar" "expecting a variable"
+            failingFile "Wildcard is not a variable" ["test/Failing"] "WildcardVar" "expecting a variable",
+            failingFile "Missing variable in pattern" ["test/Failing"] "InvalidPattern1" "too few variables.*\\(_:Unit\\)",
+            failingFile "Extra variable in pattern" ["test/Failing"] "InvalidPattern2" "too many variables.*u4.*unused",
+            failingFile "Dependent wildcard must not be confused" ["test/Failing"] "DependentWildcardConfusion" ""
           ]
   defaultMain $
     testGroup
@@ -66,7 +69,7 @@ tcFile path name = tester name path name $ \case
 
 -- | Check that processing of a file fails (parsing or type error)
 failingFile :: String -> [String] -> String -> String -> TestTree
-failingFile expl path name expected = tester name path name $ \case
+failingFile expl path name expected = tester expl path name $ \case
   TestSuccess _ logs@(_ : _) -> assertFailure $ "Warnings were produced:" ++ intercalate "\n" logs
   TestSuccess r [] -> assertFailure $ "File did not fail with expected error: " ++ render (disp expected)
   ParsingFailure err -> checkErr (show err)

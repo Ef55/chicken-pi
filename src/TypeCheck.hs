@@ -148,13 +148,13 @@ checkMatch scrut ret branches = do
           Env.extendCtx (Decl $ TypeDecl n Rel xType) $ enterBranch ns t'' k
         ([], t@(Tele _)) ->
           Env.err
-            [ DS "Unbound argument in pattern:",
+            [ DS "Too few variables in pattern: parameters",
               DD t,
-              DS "should be fully introduced."
+              DS "are not bound."
             ]
         (n : _, _) ->
           Env.err
-            [ DS "Too many arguments in pattern:",
+            [ DS "Too many variables in pattern:",
               DD n,
               DS "is the first unused name."
             ]
