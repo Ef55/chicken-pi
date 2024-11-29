@@ -22,7 +22,8 @@ import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
 
 main :: IO ()
 main = do
-  let dataTests = testGroup "Data" (tcFile ["pi/Data"] <$> ["Unit", "Bool", "Nat", "Pos"])
+  let dataExamples = testGroup "Examples: Data" (tcFile ["pi/Data"] <$> ["Unit", "Bool", "Nat", "Pos"])
+  let dataTests = testGroup "Data" (tcFile ["test/Data"] <$> ["Dependent"])
   let matchingTests = testGroup "Matching" (tcFile ["test/Matching"] <$> ["Subst", "Eval", "Wildcard"])
   let failingTests =
         testGroup
@@ -35,6 +36,7 @@ main = do
     testGroup
       "Tests"
       [ -- QC.testProperty "PP-Parsing round trip" prop_roundtrip,
+        dataExamples,
         dataTests,
         matchingTests,
         failingTests

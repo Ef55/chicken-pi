@@ -119,7 +119,14 @@ checkMatch scrut ret branches = do
               DS "was expected."
             ]
         (tele, _) <- Unbound.unbind typCstr
-        enterBranch xs tele $ checkType body ret
+        -- If we are matching a variable, we can inject its definition in term
+        -- of the pattern it matches in the context.
+        let decl = case scrut of
+              Var s -> [Def s (foldl App (Var expCstr) (Arg Rel . Var <$> xs))]
+              _ -> []
+        Env.extendCtxs decl $ 
+          enterBranch xs tele $
+            checkType body ret
     )
     branchesCheck
   where
