@@ -22,14 +22,14 @@ import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
 
 main :: IO ()
 main = do
-  let dataTests = testGroup "Data" (tcFile ["pi/Data"] <$> ["Unit", "Bool", "Nat"])
-  let matchingTests = testGroup "Matching" (tcFile ["pi/Matching"] <$> ["Subst", "Eval", "Wildcard"])
+  let dataTests = testGroup "Data" (tcFile ["pi/Data"] <$> ["Unit", "Bool", "Nat", "Pos"])
+  let matchingTests = testGroup "Matching" (tcFile ["test/Matching"] <$> ["Subst", "Eval", "Wildcard"])
   let failingTests =
         testGroup
           "Failing"
-          [ failingFile "Non exhaustive pattern matching" ["pi/Failing"] "NonExhaustive" "pattern matching.*2 branches.*3 constructors",
-            failingFile "Unordered pattern matching" ["pi/Failing"] "UnorderedPatterns" "Three.*Two was expected",
-            failingFile "Wildcard is not a variable" ["pi/Failing"] "WildcardVar" "expecting a variable"
+          [ failingFile "Non exhaustive pattern matching" ["test/Failing"] "NonExhaustive" "pattern matching.*2 branches.*3 constructors",
+            failingFile "Unordered pattern matching" ["test/Failing"] "UnorderedPatterns" "Three.*Two was expected",
+            failingFile "Wildcard is not a variable" ["test/Failing"] "WildcardVar" "expecting a variable"
           ]
   defaultMain $
     testGroup
