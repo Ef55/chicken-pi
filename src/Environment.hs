@@ -132,15 +132,16 @@ lookupTyMaybe v = do
       return $ demoteDecl ep <$> r
     go (dat@(Data dt constructors) : ctx) = do
       let r1 = testDecl dt
-          r2 = foldl (\acc c -> acc <|> testDecl c) Nothing constructors
-      r3 <- go ctx
-      return $ r1 <|> r2 <|> r3
+      r2 <- go ctx
+      return $ r1 <|> r2
     go (_ : ctx) = go ctx
     go [] = return Nothing
 
     testDecl :: TypeDecl -> Maybe TypeDecl
     testDecl decl =
       if v == declName decl then Just decl else Nothing
+
+
 
 demoteDecl :: Epsilon -> TypeDecl -> TypeDecl
 demoteDecl ep s = s {declEp = min ep (declEp s)}

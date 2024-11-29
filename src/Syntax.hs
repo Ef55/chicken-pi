@@ -139,12 +139,15 @@ mkDecl :: TName -> Type -> Entry
 mkDecl n ty = Decl (TypeDecl n Rel ty)
 
 -- | A list of parameters of datatype/constructor
-newtype Telescope = Telescope [TypeDecl]
+data Telescope
+  = Empty
+  | Tele (Unbound.Rebind (TName, Unbound.Embed Type) Telescope)
   deriving (Show, Generic)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
 -- | A constructor is a name equipped with a telescope
-type Constructor = TypeDecl
+data Constructor = Constructor {cstrName :: TName, cstrType :: Unbound.Bind Telescope Type}
+  deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 -- | Entries are the components of modules
 data Entry

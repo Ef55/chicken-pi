@@ -132,6 +132,8 @@ instance Disp Arg
 
 instance Disp [Arg]
 
+instance Disp Telescope
+
 ------------------------------------------------------------------------
 
 -- * Display Instances for Modules
@@ -156,11 +158,33 @@ instance Display [Entry] where
     dd <- mapM display ds
     pure $ PP.vcat dd
 
+instance Display Telescope where
+  display Empty = const PP.empty
+  display (Tele bnd) = do
+    let ((x, Unbound.Embed xType), tele') = Unbound.unrebind bnd
+    dx <- display x
+    dt <- display xType
+    dT <- display tele'
+    return $ PP.text "("
+                      PP.<> dx
+                      PP.<> PP.text ":"
+                      PP.<> dt
+                      PP.<> PP.text ")"
+                      PP.<> dT
+
 instance Display TypeDecl where
   display decl = do
     dn <- display (declName decl)
     dt <- display (declType decl)
     pure $ dn <+> PP.text ":" <+> dt
+
+instance Display Constructor where
+  display decl = do
+    Unbound.lunbind (cstrType decl) $ \(t, r) -> do
+      dn <- display (cstrName decl)
+      dt <- display t
+      dr <- display r
+      pure $ dn <+> dt <+> PP.text ":" <+> dr
 
 instance Display Entry where
   display (Def n term) = do
@@ -173,7 +197,7 @@ instance Display Entry where
     dtn <- display typeName
     dtt <- display typeType
     let top = PP.text "data" <+> dtn <+> PP.text ":" <+> dtt <+> PP.text "="
-    constructors <- mapM display cstrs 
+    constructors <- mapM display cstrs
     return $ top $$ PP.nest 2 (PP.vcat constructors)
 
 instance Disp Epsilon where

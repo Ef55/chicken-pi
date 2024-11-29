@@ -6,6 +6,7 @@ module Equal
     equate,
     unify,
     unconstruct,
+    -- teleToPi
   )
 where
 
@@ -162,7 +163,7 @@ whnf (Case s r branches) = do
   sb <- pickBranch ns branches
   case sb of
     Just (b, s) -> whnf $ Unbound.substs s b
-    Nothing -> return $ Case ns r branches 
+    Nothing -> return $ Case ns r branches
 
 -- ignore/remove type annotations and source positions when normalizing
 whnf (Ann tm _) = whnf tm
@@ -257,6 +258,18 @@ amb _ = False
 
 -------------------------------------------------------
 
+-- teleToPi :: Unbound.Bind Telescope Type -> Type
+-- teleToPi bnd = Unbound.runFreshM $ do
+--   (t, r) <- Unbound.unbind bnd
+--   return $ iter r t
+--   where
+--     iter :: Type -> Telescope -> Type
+--     iter r Empty = r
+--     iter r (Tele bnd) = do
+--       let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+--           b = iter r t'
+--         in TyPi Rel xType (Unbound.bind x b)
+
 -- | "Unconstruct" an applied constructor (or function, but
 -- why would you do that?), and return its name and arguments.
 unconstruct ::
@@ -274,5 +287,5 @@ unconstruct term0 = iter (strip term0) []
         Env.err
           [ DS "Expected constructor at head",
             DD term0,
-            DS "is a sequence of applications headed by a variable."
+            DS "is not a sequence of applications headed by a variable."
           ]

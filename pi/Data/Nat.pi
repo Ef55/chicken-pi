@@ -2,8 +2,8 @@ module Nat where
 import Bool
 
 data Nat : Type :=
-  Z : Nat
-  S : Nat -> Nat
+  Z: Nat
+  S (Nat): Nat
 
 isZero : Nat -> Bool
 isZero = \n . case n of

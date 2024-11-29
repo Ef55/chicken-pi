@@ -99,13 +99,7 @@ checkMatch :: Term -> Type -> [Branch] -> TcMonad ()
 checkMatch scrut ret branches = do
   tyS <- inferType scrut
   ret <- Equal.whnf ret
-  (TypeDecl typeName _ _, constructors) <-
-    Equal.unconstruct tyS
-      >>= \(m, _) -> do
-        m' <- Env.lookupTypeConstructor m
-        case m' of
-          Nothing -> Env.err [DD m, DS "is not a type constructor" ]
-          Just d -> return d
+  (TypeDecl typeName _ _, constructors) <- checkTypeConstructor tyS
   when (length branches /= length constructors) $
     Env.err
       [ DS $ "Pattern matching has " ++ show (length branches) ++ " branches, yet the matched type",
@@ -114,7 +108,7 @@ checkMatch scrut ret branches = do
       ]
   let branchesCheck = zip constructors branches
   mapM_
-    ( \(TypeDecl expCstr _ typCstr, branch) -> do
+    ( \(Constructor expCstr typCstr, branch) -> do
         (PatCon cstr xs, body) <- Unbound.unbind (getBranch branch)
         when (expCstr /= string2Name cstr) $
           Env.err
@@ -124,23 +118,31 @@ checkMatch scrut ret branches = do
               DD expCstr,
               DS "was expected."
             ]
-        enterBranch xs typCstr $ checkType body ret
+        (tele, _) <- Unbound.unbind typCstr
+        enterBranch xs tele $ checkType body ret
     )
     branchesCheck
   where
-    enterBranch :: [TName] -> Term -> TcMonad a -> TcMonad a
-    enterBranch names typ k = do
-      -- TODO: ensure that typ is already normalized in context
-      typ' <- Equal.whnf typ
-      case (names, typ') of
-        (n : ns, TyPi eps a bnd) -> do
-          let b = instantiate bnd (Var n)
-          Env.extendCtx (Decl $ TypeDecl n eps a) $ enterBranch ns b k
-        -- TODO: errors
-        ([], TyPi _ _ _) ->
+    checkTypeConstructor :: Type -> TcMonad (TypeDecl, [Constructor])
+    checkTypeConstructor tyS =
+      Equal.unconstruct tyS
+        >>= \(m, _) -> do
+          m' <- Env.lookupTypeConstructor m
+          case m' of
+            Nothing -> Env.err [DD m, DS "is not a type constructor"]
+            Just d -> return d
+
+    enterBranch :: [TName] -> Telescope -> TcMonad a -> TcMonad a
+    enterBranch names tele k = do
+      case (names, tele) of
+        (n : ns, Tele t) -> do
+          let ((x, Unbound.Embed xType), t') = Unbound.unrebind t
+              t'' = Unbound.subst x (Var n) t'
+          Env.extendCtx (Decl $ TypeDecl n Rel xType) $ enterBranch ns t'' k
+        ([], t@(Tele _)) ->
           Env.err
             [ DS "Unbound argument in pattern:",
-              DD typ',
+              DD t,
               DS "should be fully introduced."
             ]
         (n : _, _) ->
@@ -363,45 +365,48 @@ tcEntry (Decl decl) = do
 tcEntry (Demote ep) = return (AddCtx [Demote ep])
 tcEntry dat@(Data typ constructors) = do
   duplicateTypeBindingCheck typ
-  Env.extendCtx dat $ tcConstructors constructors
-  return $ AddCtx [dat]
+  cstrs <- Env.extendCtx dat $ tcConstructors constructors
+  return $ AddCtx (dat : cstrs)
   where
-    tcConstructors :: [Constructor] -> TcMonad ()
-    tcConstructors [] = return ()
-    tcConstructors (h : t) = tcConstructor typ h >> tcConstructors t
+    tcConstructors :: [Constructor] -> TcMonad [Entry]
+    tcConstructors [] = return []
+    tcConstructors (h : t) = do
+      h' <- tcConstructor typ h
+      t' <- tcConstructors t
+      return (Decl h' : t')
 
-tcConstructor :: TypeDecl -> Constructor -> TcMonad ()
-tcConstructor dat@(TypeDecl dataTypeName _ _) (TypeDecl name _ cstrType) = do
+tcConstructor :: TypeDecl -> Constructor -> TcMonad TypeDecl
+tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
   -- TODO: positivity check
-  tcType cstrType
-  iter cstrType
+  (tele, r) <- Unbound.unbind cstrType
+  typ <- checkTelescope tele $ checkConstructor r
+  return $ TypeDecl name Rel typ
   where
-    iter :: Term -> TcMonad ()
-    iter typ = do
-      typ' <- Equal.whnf typ
-      case typ' of
-        -- Go through the chain of arrows
-        (TyPi _ a bnd) -> do
-          (x, tyB) <- unbind bnd
-          tcType a
-          Env.extendCtxs [mkDecl x TyType] $ iter tyB
-        -- And once the tail is reached
-        _ -> do
-          -- Extract the head
-          (name, _) <- Equal.unconstruct typ'
-          -- which must by the type being defined.
-          if name == dataTypeName
-            then return ()
-            else
-              Env.err
-                [ DS "The constructor",
-                  DD typ',
-                  DS "should be for type",
-                  DD dataTypeName,
-                  DS ", ",
-                  DD name,
-                  DS "found instead"
-                ]
+    checkConstructor :: Type -> TcMonad Type
+    checkConstructor t = do
+      (name, args) <- Equal.unconstruct t
+      -- TODO: type indices/parameters
+      guard (null args)
+      -- which must by the type being defined.
+      if name == dataTypeName
+        then return $ foldl App (Var name) (Arg Rel <$> args)
+        else
+          Env.err
+            [ DS "The constructor",
+              DD name,
+              DS "should be for type",
+              DD dataTypeName,
+              DS ", ",
+              DD name,
+              DS "found instead"
+            ]
+
+    checkTelescope :: Telescope -> TcMonad Type -> TcMonad Type
+    checkTelescope Empty k = k
+    checkTelescope (Tele bnd) k = do
+      let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+      t <- Env.extendCtxs [mkDecl x xType] $ checkTelescope t' k
+      return $ TyPi Rel xType (Unbound.bind x t)
 
 -- | Make sure that we don't have the same name twice in the
 -- environment. (We don't rename top-level module definitions.)

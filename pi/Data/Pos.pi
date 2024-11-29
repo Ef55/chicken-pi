@@ -2,9 +2,9 @@ module Pos where
 
 data Pos : Type :=
   O : Pos
-  S : Pos -> Pos
+  S (Pos): Pos
 
 data BinPos : Type :=
   MSB : BinPos
-  xI : BinPos -> BinPos
-  xO : BinPos -> BinPos
+  xI (BinPos): BinPos
+  xO (BinPos): BinPos

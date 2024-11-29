@@ -266,19 +266,22 @@ dataDef = do
   where
     constructorDef = do
       name <- variable
+      tele <- telescope
       colon
       typ <- expr
-      return $ TypeDecl name Rel typ
+      return $ Constructor name (Unbound.bind tele typ)
 
--- telescope :: LParser Telescope
--- telescope = Telescope <$> many (parens binding)
+telescope :: LParser Telescope
+telescope = do
+  bnds <- many binding
+  let tele = foldr (\(x, xType) t -> Tele $ Unbound.rebind (x, Unbound.Embed xType) t) Empty bnds
+  return tele
 
--- binding :: LParser TypeDecl
--- binding = do
---   name <- variable
---   colon
---   typ <- term
---   return $ TypeDecl name Rel typ
+binding :: LParser (TName, Type)
+binding = parens (do
+  name <- option wildcardName (try $ varOrWildcard >>= \n -> colon >> return n)
+  typ <- expr
+  return (name, typ))
 
 ------------------------
 ------------------------
