@@ -16,6 +16,7 @@ import Syntax
 import Text.PrettyPrint.HughesPJ (render, ($$))
 import Unbound.Generics.LocallyNameless (string2Name)
 import Unbound.Generics.LocallyNameless qualified as Unbound
+import Unbound.Generics.LocallyNameless.Internal.Fold qualified as Unbound
 
 ---------------------------------------------------------------------
 
@@ -124,7 +125,7 @@ checkMatch scrut ret branches = do
         let decl = case scrut of
               Var s -> [Def s (foldl App (Var expCstr) (Arg Rel . Var <$> xs))]
               _ -> []
-        Env.extendCtxs decl $ 
+        Env.extendCtxs decl $
           enterBranch xs tele $
             checkType body ret
     )
@@ -384,17 +385,23 @@ tcEntry dat@(Data typ constructors) = do
 
 tcConstructor :: TypeDecl -> Constructor -> TcMonad TypeDecl
 tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
-  -- TODO: positivity check
   (tele, r) <- Unbound.unbind cstrType
   typ <- checkTelescope tele $ checkConstructor r
   return $ TypeDecl name Rel typ
   where
     checkConstructor :: Type -> TcMonad Type
     checkConstructor t = do
+      tcType t -- TODO: is that enough to ensure that it is fully applied?
       (name, args) <- Equal.unconstruct t
       -- TODO: type indices/parameters
+      when (occursInArgs dataTypeName args) $
+        Env.err
+          [ DD dataTypeName,
+            DS "is the datatype currently being defined, and hence is not allowed to be used as an argument in",
+            DD t
+          ]
       guard (null args)
-      -- which must by the type being defined.
+      -- which must be the type being defined.
       if name == dataTypeName
         then return $ foldl App (Var name) (Arg Rel <$> args)
         else
@@ -412,8 +419,40 @@ tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
     checkTelescope Empty k = k
     checkTelescope (Tele bnd) k = do
       let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+      checkStrictPositivity dataTypeName xType
       t <- Env.extendCtxs [mkDecl x xType] $ checkTelescope t' k
       return $ TyPi Rel xType (Unbound.bind x t)
+
+    checkStrictPositivity :: TName -> Term -> TcMonad ()
+    checkStrictPositivity v t = do
+      t' <- Equal.whnf t
+      case t' of
+        (TyPi _ boundType bnd) -> do
+          (_, r) <- Unbound.unbind bnd
+          when (occursInTerm v boundType) $
+            Env.err
+              [ DD v,
+                DS "is the datatype currently being defined, and hence is not allowed to appear on the left side of",
+                DD t'
+              ]
+          checkStrictPositivity v r
+        _ | not $ occursInTerm v t' -> return ()
+        _ -> do
+          -- TODO: relax to allow uniform arguments to different datatype
+          (_, args) <- catchError (Equal.unconstruct t') (\_ -> Env.err [DS ""])
+          when (occursInArgs v args) $
+            Env.err
+              [ DD v,
+                DS "is the datatype currently being defined, and hence is not allowed be used as an argument in",
+                DD t'
+              ]
+
+    occursInTerm :: TName -> Term -> Bool
+    occursInTerm v' t =
+      not $ null [v | v <- fv t, v == v']
+
+    occursInArgs :: TName -> [Term] -> Bool
+    occursInArgs v = any (occursInTerm v)
 
 -- | Make sure that we don't have the same name twice in the
 -- environment. (We don't rename top-level module definitions.)
