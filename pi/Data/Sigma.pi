@@ -1,0 +1,12 @@
+module Sigma where
+
+data Sigma (A: Type) (B: A -> Type): Type :=
+  Prod (a: A) (b: B a): Sigma A B
+
+fst : (A: Type) -> (B: A -> Type) -> Sigma A B -> A
+fst = \ A B s . case s of
+  Prod a _ -> a
+
+snd : (A: Type) -> (B: A -> Type) -> (s: Sigma A B) -> B (fst A B s)
+snd = \ A B s . case s of
+  Prod _ b -> b

@@ -65,6 +65,8 @@ data D
     DS String
   | -- | Displayable value
     forall a. (Disp a) => DD a
+  | -- | Displayable list
+    DL [D]
 
 initDI :: DispInfo
 initDI =
@@ -84,9 +86,11 @@ initDI =
 instance Disp D where
   disp (DS s) = PP.text s
   disp (DD d) = PP.nest 2 $ disp d
+  disp (DL l) = PP.hsep $ map disp l
 
   debugDisp d@(DS s) = disp d
   debugDisp (DD d) = PP.nest 2 $ debugDisp d
+  debugDisp (DL l) = PP.hsep $ map debugDisp l
 
 instance Disp [D] where
   disp dl = PP.sep $ map disp dl
@@ -131,6 +135,8 @@ instance Disp TypeDecl
 instance Disp Arg
 
 instance Disp [Arg]
+
+instance Disp Constructor
 
 instance Disp Telescope
 
@@ -179,7 +185,7 @@ instance Display TypeDecl where
     pure $ dn <+> PP.text ":" <+> dt
 
 instance Display Constructor where
-  display decl = do
+  display decl =
     Unbound.lunbind (cstrType decl) $ \(t, r) -> do
       dn <- display (cstrName decl)
       dt <- display t
@@ -193,12 +199,14 @@ instance Display Entry where
     pure $ dn <+> PP.text "=" <+> dt
   display (Decl decl) = display decl
   display (Demote ep) = return mempty
-  display (Data (TypeDecl typeName _ typeType) cstrs) = do
-    dtn <- display typeName
-    dtt <- display typeType
-    let top = PP.text "data" <+> dtn <+> PP.text ":" <+> dtt <+> PP.text "="
-    constructors <- mapM display cstrs
-    return $ top $$ PP.nest 2 (PP.vcat constructors)
+  display (Data (TypeConstructor typeName sort pack)) =
+    Unbound.lunbind pack $ \(params, cstrs) -> do
+      dtn <- display typeName
+      dp <- display params
+      ds <- display sort
+      let top = PP.text "data" <+> dtn <+> dp <+> PP.text ":" <+> ds <+> PP.text ":="
+      constructors <- mapM display cstrs
+      return $ top $$ PP.nest 2 (PP.vcat constructors)
 
 instance Disp Epsilon where
   disp Irr = PP.text "irrelevant"

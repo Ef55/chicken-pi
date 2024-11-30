@@ -11,7 +11,7 @@ import Debug.Trace
 import Environment (D (..), TcMonad)
 import Environment qualified as Env
 import Equal qualified
-import PrettyPrint (Disp (disp), debug, pp)
+import PrettyPrint (Disp (disp))
 import Syntax
 import Text.PrettyPrint.HughesPJ (render, ($$))
 import Unbound.Generics.LocallyNameless (string2Name)
@@ -55,7 +55,7 @@ inferType a = case a of
         -- if the argument is Irrelevant, resurrect the context
         (if ep1 == Irr then Env.extendCtx (Demote Rel) else id) $ checkType (unArg b) tyA
         return (instantiate bnd (unArg b))
-      _ -> Env.err [DS "Expected a function type but found ", DD ty1]
+      _ -> Env.err [DS "Expected a function type but found", DD a, DS "of type", DD ty1]
 
   -- i-ann
   (Ann a tyA) -> do
@@ -100,14 +100,15 @@ checkMatch :: Term -> Type -> [Branch] -> TcMonad ()
 checkMatch scrut ret branches = do
   tyS <- inferType scrut
   ret <- Equal.whnf ret
-  (TypeDecl typeName _ _, constructors) <- checkTypeConstructor tyS
+  (typeName, params, pack) <- checkTypeConstructor tyS
+  (paramsBinders, constructors) <- Unbound.unbind pack
+  constructors <- substTele params paramsBinders constructors
   when (length branches /= length constructors) $
     Env.err
       [ DS $ "Pattern matching has " ++ show (length branches) ++ " branches, yet the matched type",
         DD typeName,
         DS $ "has " ++ show (length constructors) ++ " constructors."
       ]
-  let branchesCheck = zip constructors branches
   mapM_
     ( \(Constructor expCstr typCstr, branch) -> do
         (PatCon cstr xs, body) <- Unbound.unbind (getBranch branch)
@@ -129,16 +130,25 @@ checkMatch scrut ret branches = do
           enterBranch xs tele $
             checkType body ret
     )
-    branchesCheck
+    (zip constructors branches)
   where
-    checkTypeConstructor :: Type -> TcMonad (TypeDecl, [Constructor])
+    checkTypeConstructor :: Type -> TcMonad (TName, [Term], Unbound.Bind Telescope [Constructor])
     checkTypeConstructor tyS =
       Equal.unconstruct tyS
-        >>= \(m, _) -> do
+        >>= \(m, params) -> do
           m' <- Env.lookupTypeConstructor m
           case m' of
             Nothing -> Env.err [DD m, DS "is not a type constructor"]
-            Just d -> return d
+            Just (TypeConstructor name _ cstrs) -> return (name, params, cstrs)
+
+    substTele :: [Term] -> Telescope -> [Constructor] -> TcMonad [Constructor]
+    substTele [] Empty r = return r
+    substTele (a : as) (Tele t) r = do
+      let ((x, _), t') = Unbound.unrebind t
+          t'' = Unbound.subst x a t'
+          r' = Unbound.subst x a r
+      substTele as t'' r'
+    substTele _ _ _ = error "Internal error: substTele failed"
 
     enterBranch :: [TName] -> Telescope -> TcMonad a -> TcMonad a
     enterBranch names tele k = do
@@ -166,6 +176,10 @@ checkMatch scrut ret branches = do
 -- | Make sure that the term is a "type" (i.e. that it has type 'Type')
 tcType :: Term -> TcMonad ()
 tcType tm = Env.withStage Irr $ checkType tm TyType
+
+-- | Make sure that the term is a sort
+isSort :: Term -> Bool
+isSort tm = aeq tm TyType
 
 -------------------------------------------------------------------------
 
@@ -371,20 +385,38 @@ tcEntry (Decl decl) = do
   tcType (declType decl)
   return $ AddHint decl
 tcEntry (Demote ep) = return (AddCtx [Demote ep])
-tcEntry dat@(Data typ constructors) = do
-  duplicateTypeBindingCheck typ
-  cstrs <- Env.extendCtx dat $ tcConstructors constructors
-  return $ AddCtx (dat : cstrs)
+tcEntry dat@(Data (TypeConstructor typ sort pack)) = do
+  unless (isSort sort) $ Env.err [DD typ, DS "is not a sort."]
+  (params, constructors) <- Unbound.unbind pack
+  let td = TypeDecl typ Rel (teleToPi params sort)
+  duplicateTypeBindingCheck td
+  cstrs <- Env.extendCtx (Decl td) $ underTelescope params $ \p -> tcConstructors typ p constructors
+  return $ AddCtx (dat : Decl td : cstrs)
   where
-    tcConstructors :: [Constructor] -> TcMonad [Entry]
-    tcConstructors [] = return []
-    tcConstructors (h : t) = do
-      h' <- tcConstructor typ h
-      t' <- tcConstructors t
+    teleToPi :: Telescope -> Type -> Type
+    teleToPi Empty r = r
+    teleToPi (Tele bnd) r = do
+      let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+          b = teleToPi t' r
+       in TyPi Rel xType (Unbound.bind x b)
+
+    underTelescope :: Telescope -> ([TName] -> TcMonad a) -> TcMonad a
+    underTelescope t k = iter [] t
+      where
+        iter p Empty = k (reverse p)
+        iter p (Tele bnd) = do
+          let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+          Env.extendCtxs [mkDecl x xType] $ iter (x : p) t'
+
+    tcConstructors :: TName -> [TName] -> [Constructor] -> TcMonad [Entry]
+    tcConstructors _ _ [] = return []
+    tcConstructors typ params (h : t) = do
+      h' <- tcConstructor typ params h
+      t' <- tcConstructors typ params t
       return (Decl h' : t')
 
-tcConstructor :: TypeDecl -> Constructor -> TcMonad TypeDecl
-tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
+tcConstructor :: TName -> [TName] -> Constructor -> TcMonad TypeDecl
+tcConstructor dataTypeName params (Constructor name cstrType) = do
   (tele, r) <- Unbound.unbind cstrType
   typ <- checkTelescope tele $ checkConstructor r
   return $ TypeDecl name Rel typ
@@ -392,18 +424,25 @@ tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
     checkConstructor :: Type -> TcMonad Type
     checkConstructor t = do
       tcType t -- TODO: is that enough to ensure that it is fully applied?
-      (name, args) <- Equal.unconstruct t
-      -- TODO: type indices/parameters
+      (tName, args) <- Equal.unconstruct t
+      unless (all (uncurry aeq) $ zip (Var <$> params) (take (length params) args)) $
+        Env.err
+          [ DS $ "The first " ++ (show . length) params ++ " argument(s) of the type of constructor",
+            DD name,
+            DS "should be",
+            DL $ DD <$> params,
+            DS "found",
+            DL $ DD <$> args
+          ]
       when (occursInArgs dataTypeName args) $
         Env.err
           [ DD dataTypeName,
             DS "is currently being defined, and hence is not allowed to be used as an argument in",
             DD t
           ]
-      guard (null args)
       -- which must be the type being defined.
-      if name == dataTypeName
-        then return $ foldl App (Var name) (Arg Rel <$> args)
+      if tName == dataTypeName
+        then return $ foldl App (Var tName) (Arg Rel <$> args)
         else
           Env.err
             [ DS "The constructor",
@@ -411,7 +450,7 @@ tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
               DS "should be for type",
               DD dataTypeName,
               DS ", ",
-              DD name,
+              DD tName,
               DS "found instead"
             ]
 

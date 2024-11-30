@@ -1,0 +1,7 @@
+module ParamNotIndex where
+
+data t0 : Type := {}
+data t1 : Type := {}
+
+data T (P: Type) (Q: Type): Type :=
+  C : T t0 t1

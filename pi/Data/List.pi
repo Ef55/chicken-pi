@@ -1,0 +1,10 @@
+module List where
+
+data List (T: Type) : Type :=
+  Nil: List T
+  Cons (h: T) (t: List T) : List T
+
+foldLeft : (U: Type) -> (S: Type) -> (S -> U -> S) -> S -> List U -> S
+foldLeft = \U S f s ts . case ts of
+  Nil -> s
+  Cons t ts' -> foldLeft U S f (f s t) ts'

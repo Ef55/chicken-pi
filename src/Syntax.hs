@@ -149,6 +149,9 @@ data Telescope
 data Constructor = Constructor {cstrName :: TName, cstrType :: Unbound.Bind Telescope Type}
   deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
+data TypeConstructor = TypeConstructor {typeName :: TName, typeSort :: Type, constructors :: Unbound.Bind Telescope [Constructor]}
+  deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
+
 -- | Entries are the components of modules
 data Entry
   = -- | Declaration for the type of a term  'x : A'
@@ -159,7 +162,7 @@ data Entry
   | -- | Adjust the context for relevance checking
     Demote Epsilon
   | -- | The definition of a datatype
-    Data TypeDecl [Constructor]
+    Data TypeConstructor
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 

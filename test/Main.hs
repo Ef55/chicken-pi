@@ -22,12 +22,14 @@ import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
 
 tests :: TestTree
 tests =
-  let dataTests = testGroup "Data" (tcFile ["test/Data"] <$> ["Dependent"])
+  let dataTests = testGroup "Data" (tcFile ["test/Data"] <$> ["Dependent", "MultiParams"])
       matchingTests = testGroup "Matching" (tcFile ["test/Matching"] <$> ["Subst", "Eval", "Wildcard"])
       positivityTests =
         testGroup
           "Positivity"
-          [ failingFile "Cannot be argument of argument" ["test/Positivity"] "ArgOfArg" "T is currently being defined.*left side.*T -> T"
+          [ failingFile "Cannot be argument of argument" ["test/Positivity"] "ArgOfArg" "T is currently being defined.*left side.*T -> T",
+            failingFile "Self cannot be used non-uniformly" ["test/Positivity"] "SelfNonUniform" "T is currently being defined.*as an argument.*NU T",
+            failingFile "Constructors are parametric on parameters" ["test/Positivity"] "ParamNotIndex" "first 2 argument.*should be P Q.*found t0 t1"
           ]
       failingTests =
         testGroup
@@ -50,7 +52,7 @@ tests =
 
 examples :: TestTree
 examples =
-  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos"])
+  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos", "List", "Sigma"])
    in testGroup
         "Examples"
         [ dataExamples

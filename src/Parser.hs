@@ -253,16 +253,13 @@ valDef = do
   return $ Def n val
 dataDef = do
   try (reserved "data")
-  (tName, tType) <-
-    ( do
-        n <- variable
-        colon
-        t <- expr
-        reservedOp ":="
-        return (n, t)
-      )
+  tName <- variable
+  params <- telescope
+  colon
+  s <- expr
+  reservedOp ":="
   constructors <- layout constructorDef (return ())
-  return $ Data (TypeDecl tName Rel tType) constructors
+  return $ Data $ TypeConstructor tName s (Unbound.bind params constructors)
   where
     constructorDef = do
       name <- variable

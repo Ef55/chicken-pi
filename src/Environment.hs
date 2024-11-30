@@ -130,10 +130,6 @@ lookupTyMaybe v = do
     go (Demote ep : ctx) = do
       r <- go ctx
       return $ demoteDecl ep <$> r
-    go (dat@(Data dt constructors) : ctx) = do
-      let r1 = testDecl dt
-      r2 <- go ctx
-      return $ r1 <|> r2
     go (_ : ctx) = go ctx
     go [] = return Nothing
 
@@ -176,14 +172,14 @@ lookupDef v = do
 lookupTypeConstructor ::
   (MonadReader Env m) =>
   TName ->
-  m (Maybe (TypeDecl, [Constructor]))
+  m (Maybe TypeConstructor)
 lookupTypeConstructor name = do
   ctx <- asks ctx
   return $ go ctx
   where
-    go :: [Entry] -> Maybe (TypeDecl, [Constructor])
-    go ((Data typ cstrs) : ctx)
-      | name == declName typ = Just (typ, cstrs)
+    go :: [Entry] -> Maybe TypeConstructor
+    go ((Data tc) : ctx)
+      | name == typeName tc = Just tc
       | otherwise = go ctx
     go (_ : ctx) = go ctx
     go [] = Nothing
