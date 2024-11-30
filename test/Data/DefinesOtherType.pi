@@ -1,0 +1,8 @@
+module DefinesOtherType where
+
+data D0: Type := {}
+
+data D1: Type :=
+  C0: D1
+  C1: D0
+  C2: D1

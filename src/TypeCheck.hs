@@ -423,9 +423,8 @@ tcConstructor dataTypeName params (Constructor name cstrType) = do
   where
     checkConstructor :: Type -> TcMonad Type
     checkConstructor t = do
-      tcType t -- TODO: is that enough to ensure that it is fully applied?
       (tName, args) <- Equal.unconstruct t
-      unless (all (uncurry aeq) $ zip (Var <$> params) (take (length params) args)) $
+      unless ((length params <= length args) && all (uncurry aeq) (zip (Var <$> params) (take (length params) args))) $
         Env.err
           [ DS $ "The first " ++ (show . length) params ++ " argument(s) of the type of constructor",
             DD name,
@@ -449,7 +448,7 @@ tcConstructor dataTypeName params (Constructor name cstrType) = do
               DD name,
               DS "should be for type",
               DD dataTypeName,
-              DS ", ",
+              DS ",",
               DD tName,
               DS "found instead"
             ]

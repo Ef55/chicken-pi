@@ -1,0 +1,4 @@
+module NotFullyApplied where
+
+data NFA (S: Type) (T: Type) (U: Type): Type :=
+  C : NFA S T

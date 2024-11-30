@@ -20,27 +20,42 @@ import Text.Regex
 import TypeCheck
 import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
 
+--------------------------------------------------------------------------------
+-- Definition of tests to run
+--------------------------------------------------------------------------------
+
 tests :: TestTree
 tests =
-  let dataTests = testGroup "Data" (tcFile ["test/Data"] <$> ["Dependent", "MultiParams"])
-      matchingTests = testGroup "Matching" (tcFile ["test/Matching"] <$> ["Subst", "Eval", "Wildcard"])
+  let dataTests =
+        testGroup "Data" $
+          positiveTests "test/Data" ["Dependent", "MultiParams"]
+            ++ negativeTests
+              "test/Data"
+              [ ("Constructors must be for the type being defined", "DefinesOtherType", "C1.*should be.*D1.*D0 found"),
+                ("Constructors must fully apply the type being defined", "NotFullyApplied", "first 3 argument.*should be S T U.*found S T")
+              ]
+      matchingTests = testGroup "Matching" (positiveTests "test/Matching" ["Subst", "Eval", "Wildcard"])
       positivityTests =
         testGroup
           "Positivity"
-          [ failingFile "Cannot be argument of argument" ["test/Positivity"] "ArgOfArg" "T is currently being defined.*left side.*T -> T",
-            failingFile "Self cannot be used non-uniformly" ["test/Positivity"] "SelfNonUniform" "T is currently being defined.*as an argument.*NU T",
-            failingFile "Constructors are parametric on parameters" ["test/Positivity"] "ParamNotIndex" "first 2 argument.*should be P Q.*found t0 t1"
-          ]
+          $ negativeTests
+            "test/Positivity"
+            [ ("Cannot be argument of argument", "ArgOfArg", "T is currently being defined.*left side.*T -> T"),
+              ("Type being defined cannot be used non-uniformly", "SelfNonUniform", "T is currently being defined.*as an argument.*NU T"),
+              ("Constructors are parametric on parameters", "ParamNotIndex", "first 2 argument.*should be P Q.*found t0 t1")
+            ]
       failingTests =
         testGroup
           "Failing"
-          [ failingFile "Non exhaustive pattern matching" ["test/Failing"] "NonExhaustive" "pattern matching.*2 branches.*3 constructors",
-            failingFile "Unordered pattern matching" ["test/Failing"] "UnorderedPatterns" "Three.*Two was expected",
-            failingFile "Wildcard is not a variable" ["test/Failing"] "WildcardVar" "expecting a variable",
-            failingFile "Missing variable in pattern" ["test/Failing"] "InvalidPattern1" "too few variables.*\\(_:Unit\\)",
-            failingFile "Extra variable in pattern" ["test/Failing"] "InvalidPattern2" "too many variables.*u4.*unused",
-            failingFile "Dependent wildcard must not be confused" ["test/Failing"] "DependentWildcardConfusion" ""
-          ]
+          $ negativeTests
+            "test/Failing"
+            [ ("Non exhaustive pattern matching", "NonExhaustive", "pattern matching.*2 branches.*3 constructors"),
+              ("Unordered pattern matching", "UnorderedPatterns", "Three.*Two was expected"),
+              ("Wildcard is not a variable", "WildcardVar", "expecting a variable"),
+              ("Missing variable in pattern", "InvalidPattern1", "too few variables.*\\(_:Unit\\)"),
+              ("Extra variable in pattern", "InvalidPattern2", "too many variables.*u4.*unused"),
+              ("Dependent wildcard must not be confused", "DependentWildcardConfusion", "")
+            ]
    in testGroup
         "Tests"
         [ dataTests,
@@ -68,6 +83,21 @@ main = do
         examples
       ]
 
+--------------------------------------------------------------------------------
+-- Helpers for tests definition
+--------------------------------------------------------------------------------
+
+positiveTests :: String -> [String] -> [TestTree]
+positiveTests path tests = tcFile [path] <$> tests
+
+negativeTests :: String -> [(String, String, String)] -> [TestTree]
+negativeTests path ls =
+  (\(name, fileName, err) -> failingFile name [path] fileName err) <$> ls
+
+--------------------------------------------------------------------------------
+-- Testing functions
+--------------------------------------------------------------------------------
+
 data Result
   = ParsingFailure ParseError
   | TypingFailure Err
@@ -84,7 +114,7 @@ tester testName path fileName k = testCase testName $ do
 
 -- | Type check the given file
 tcFile :: [String] -> String -> TestTree
-tcFile path name = tester name path name $ \case
+tcFile path name = tester (name ++ " [✔]") path name $ \case
   ParsingFailure err -> assertFailure $ "Parsing error:" ++ render (disp err)
   TypingFailure err -> assertFailure $ "Type error:" ++ render (disp err)
   TestSuccess _ logs@(_ : _) -> assertFailure $ "Warnings were produced:" ++ intercalate "\n" logs
@@ -92,9 +122,9 @@ tcFile path name = tester name path name $ \case
 
 -- | Check that processing of a file fails (parsing or type error)
 failingFile :: String -> [String] -> String -> String -> TestTree
-failingFile expl path name expectedRaw = tester expl path name $ \case
+failingFile expl path name expectedRaw = tester (expl ++ " [✘]") path name $ \case
   TestSuccess _ logs@(_ : _) -> assertFailure $ "Warnings were produced:" ++ intercalate "\n" logs
-  TestSuccess r [] -> assertFailure $ "File did not fail with expected error: " ++ render (disp expected)
+  TestSuccess r [] -> assertFailure "File did not fail."
   ParsingFailure err -> checkErr (show err)
   TypingFailure (Err _ err) -> checkErr (render err)
   where
