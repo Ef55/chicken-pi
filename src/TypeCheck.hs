@@ -397,7 +397,7 @@ tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
       when (occursInArgs dataTypeName args) $
         Env.err
           [ DD dataTypeName,
-            DS "is the datatype currently being defined, and hence is not allowed to be used as an argument in",
+            DS "is currently being defined, and hence is not allowed to be used as an argument in",
             DD t
           ]
       guard (null args)
@@ -432,7 +432,7 @@ tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
           when (occursInTerm v boundType) $
             Env.err
               [ DD v,
-                DS "is the datatype currently being defined, and hence is not allowed to appear on the left side of",
+                DS "is currently being defined, and hence is not allowed to appear on the left side of",
                 DD t'
               ]
           checkStrictPositivity v r
@@ -443,7 +443,7 @@ tcConstructor dat@(TypeDecl dataTypeName _ _) (Constructor name cstrType) = do
           when (occursInArgs v args) $
             Env.err
               [ DD v,
-                DS "is the datatype currently being defined, and hence is not allowed be used as an argument in",
+                DS "is currently being defined, and hence is not allowed be used as an argument in",
                 DD t'
               ]
 

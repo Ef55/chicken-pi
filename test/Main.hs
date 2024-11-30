@@ -20,12 +20,16 @@ import Text.Regex
 import TypeCheck
 import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
 
-main :: IO ()
-main = do
-  let dataExamples = testGroup "Examples: Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos"])
+tests :: TestTree
+tests =
   let dataTests = testGroup "Data" (tcFile ["test/Data"] <$> ["Dependent"])
-  let matchingTests = testGroup "Matching" (tcFile ["test/Matching"] <$> ["Subst", "Eval", "Wildcard"])
-  let failingTests =
+      matchingTests = testGroup "Matching" (tcFile ["test/Matching"] <$> ["Subst", "Eval", "Wildcard"])
+      positivityTests =
+        testGroup
+          "Positivity"
+          [ failingFile "Cannot be argument of argument" ["test/Positivity"] "ArgOfArg" "T is currently being defined.*left side.*T -> T"
+          ]
+      failingTests =
         testGroup
           "Failing"
           [ failingFile "Non exhaustive pattern matching" ["test/Failing"] "NonExhaustive" "pattern matching.*2 branches.*3 constructors",
@@ -35,14 +39,31 @@ main = do
             failingFile "Extra variable in pattern" ["test/Failing"] "InvalidPattern2" "too many variables.*u4.*unused",
             failingFile "Dependent wildcard must not be confused" ["test/Failing"] "DependentWildcardConfusion" ""
           ]
+   in testGroup
+        "Tests"
+        [ dataTests,
+          matchingTests,
+          positivityTests,
+          -- universesTests,
+          failingTests
+        ]
+
+examples :: TestTree
+examples =
+  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos"])
+   in testGroup
+        "Examples"
+        [ dataExamples
+        ]
+
+main :: IO ()
+main = do
   defaultMain $
     testGroup
-      "Tests"
+      "All"
       [ -- QC.testProperty "PP-Parsing round trip" prop_roundtrip,
-        dataExamples,
-        dataTests,
-        matchingTests,
-        failingTests
+        tests,
+        examples
       ]
 
 data Result
@@ -69,12 +90,14 @@ tcFile path name = tester name path name $ \case
 
 -- | Check that processing of a file fails (parsing or type error)
 failingFile :: String -> [String] -> String -> String -> TestTree
-failingFile expl path name expected = tester expl path name $ \case
+failingFile expl path name expectedRaw = tester expl path name $ \case
   TestSuccess _ logs@(_ : _) -> assertFailure $ "Warnings were produced:" ++ intercalate "\n" logs
   TestSuccess r [] -> assertFailure $ "File did not fail with expected error: " ++ render (disp expected)
   ParsingFailure err -> checkErr (show err)
   TypingFailure (Err _ err) -> checkErr (render err)
   where
+    expected = concatMap (\c -> if c == ' ' then "\\s+" else [c]) expectedRaw
+
     checkErr :: String -> IO ()
     checkErr msg =
       if isJust $ matchRegex (mkRegexWithOpts expected False False) msg
