@@ -11,7 +11,8 @@ import Data.Maybe ( catMaybes )
 import Environment (D (..), TcMonad)
 import Environment qualified as Env
 import Equal qualified
-import PrettyPrint (Disp (disp), pp, debug)
+import Equal
+import PrettyPrint (Disp (disp), pp, debug, D(..))
 import Syntax
 import Debug.Trace
 
@@ -28,6 +29,10 @@ imax :: Level -> Level -> Level
 imax l1 (LConst 0) = LConst 0
 imax l1 l2 = LMax l1 l2
 
+subtype :: Type -> Type -> TcMonad ()
+subtype (TyType l1) (TyType l2) = Equal.equateLevels l1 l2
+subtype ty1 ty2 = Equal.equate ty1 ty2
+
 -- | Infer/synthesize the type of a term
 inferType :: Term -> TcMonad Type
 inferType a = case a of
@@ -38,7 +43,7 @@ inferType a = case a of
     return (declType decl)
 
   -- i-type
-  TyType l -> return (TyType (LPlus l 1))
+  TyType l -> return (TyType (LPlus l 1))  -- Type l : Type (l + 1)
 
   -- i-pi
   (TyPi ep tyA bnd) -> do
@@ -47,18 +52,18 @@ inferType a = case a of
     Env.extendCtx (Decl (TypeDecl x ep tyA)) $ do
       l2 <- tcType tyB
       let l = imax l1 l2
-      return (TyType l)
+      return (TyType l)  -- Pi types are in the universe level 'l'
 
   -- i-app
   (App a b) -> do
     ty1 <- inferType a 
     ty1' <- Equal.whnf ty1 
     case ty1' of 
-      (TyPi {- SOLN EP -}ep1 {- STUBWITH -} tyA bnd) -> do
+      (TyPi ep1 tyA bnd) -> do
           unless (ep1 == argEp b) $ Env.err 
             [DS "In application, expected", DD ep1, DS "argument but found", 
                                             DD b, DS "instead." ]
-          -- if the argument is Irrelevant, resurrect the context 
+          -- If the argument is Irrelevant, adjust the context
           (if ep1 == Irr then Env.extendCtx (Demote Rel) else id) $ checkType (unArg b) tyA 
           return (instantiate bnd (unArg b) )
       _ -> Env.err [DS "Expected a function type but found ", DD ty1]
@@ -76,12 +81,12 @@ inferType a = case a of
   
   -- Extensions to the core language
   -- i-unit
-  TyUnit -> return (TyType (LConst 1))
+  TyUnit -> return (TyType (LConst 1))  -- Unit type is in Type 1
 
   LitUnit -> return TyUnit
 
   -- i-bool
-  TyBool -> return $ TyType (LConst 1)
+  TyBool -> return $ TyType (LConst 1)  -- Bool type is in Type 1
 
   -- i-true/false
   (LitBool _) -> return TyBool 
@@ -100,17 +105,18 @@ inferType a = case a of
     Env.extendCtx (mkDecl x tyA) $ do
       l2 <- tcType tyB
       let l = imax l1 l2
-      return (TyType l)
+      return (TyType l)  -- Sigma types are in universe level 'l'
 
   -- i-eq
   (TyEq a b) -> do
     aTy <- inferType a
     checkType b aTy
-    return Prop
+    return Prop -- Equality types are in Prop (Type 0)
 
   -- cannot synthesize the type of the term
   _ -> 
     Env.err [DS "Must have a type annotation for", DD a] 
+
 
 
 -------------------------------------------------------------------------
@@ -126,6 +132,7 @@ tcType tm = Env.withStage Irr $ do
 
 -------------------------------------------------------------------------
 -- | Check that the given term has the expected type
+-- | Check that the given term has the expected type
 checkType :: Term -> Type -> TcMonad ()
 checkType tm ty = do
   ty' <- Equal.whnf ty 
@@ -137,14 +144,19 @@ checkType tm ty = do
         (x, body, tyB) <- unbind2 bnd bnd2
         -- check that ep1 == ep2
         unless (ep1 == ep2) $ Env.err [DS "In function definition, expected", DD ep2, DS "parameter", DD x, 
-                                      DS "but found", DD ep1, DS "instead."] 
+                                      DS "but found", DD ep1, DS "instead."]
         l1 <- tcType tyA
         Env.extendCtx (Decl (TypeDecl x ep1 tyA)) $ do
+          l2 <- tcType tyB
+          let l = imax l1 l2
+          -- Ensure that l <= tyPiLevel (universe cumulativity)
+          tyPiLevel <- tcType ty'
+          unless (l <= tyPiLevel) $
+            Env.err [DS "Expected", DD ty',
+                     DS "but found a function type in universe level", DS (show l)]
           -- Check the body
           checkType body tyB
-          -- Ensure that tyB is a valid type
-          l2 <- tcType tyB
-          return ()
+        return ()
       _ -> Env.err [DS "Lambda expression should have a function type, not", DD ty']
     -- Practicalities
     (Pos p a) -> 
@@ -153,7 +165,7 @@ checkType tm ty = do
     PrintMe -> do
       gamma <- Env.getLocalCtx
       Env.warn [DS "Unmet obligation.\nContext:", DD gamma,
-            DS "\nGoal:", DD ty']  
+            DS "\nGoal:", DD ty']
     -- Extensions to the core language
     -- c-if
     (If a b1 b2) -> do
@@ -162,24 +174,30 @@ checkType tm ty = do
       dfalse <- Equal.unify [] a (LitBool False)
       tyB1 <- Env.extendCtxs dtrue $ inferType b1
       tyB2 <- Env.extendCtxs dfalse $ inferType b2
-      -- Ensure that tyB1 and tyB2 are equal
       Equal.equate tyB1 tyB2
-      -- Ensure that the expected type ty' matches tyB1 (or tyB2)
       Equal.equate ty' tyB1
     -- c-prod
     (Prod a b) -> do
       case ty' of
         (TySigma tyA bnd) -> do
           (x, tyB) <- unbind bnd
+          l1 <- tcType tyA
           checkType a tyA
-          Env.extendCtxs [mkDecl x tyA, Def x a] $ checkType b tyB
+          Env.extendCtxs [mkDecl x tyA, Def x a] $ do
+            l2 <- tcType tyB
+            let l = imax l1 l2
+            -- Ensure that l <= tySigmaLevel (universe cumulativity)
+            tySigmaLevel <- tcType ty'
+            unless (l <= tySigmaLevel) $
+              Env.err [DS "Expected", DD ty',
+                       DS "but found a Sigma type in universe level", DS (show l)]
+            checkType b tyB
         _ ->
           Env.err
             [ DS "Products must have Sigma Type",
-              DD ty,
+              DD ty',
               DS "found instead"
             ]
-    
     -- c-letpair
     (LetPair p bnd) -> do
       ((x, y), body) <- Unbound.unbind bnd
@@ -187,48 +205,50 @@ checkType tm ty = do
       pty' <- Equal.whnf pty
       case pty' of
         TySigma tyA bnd' -> do
+          l1 <- tcType tyA
           let tyB = instantiate bnd' (Var x)
+          l2 <- Env.extendCtx (mkDecl x tyA) $ tcType tyB
+          let l = imax l1 l2
           decl <- Equal.unify [] p (Prod (Var x) (Var y))
           Env.extendCtxs ([mkDecl x tyA, mkDecl y tyB] ++ decl) $
               checkType body ty'
         _ -> Env.err [DS "Scrutinee of LetPair must have Sigma type"]
-    
     -- c-let
     (Let a bnd) -> do
       (x, b) <- unbind bnd
-      tyA <- inferType a 
+      tyA <- inferType a
+      l <- tcType tyA
       Env.extendCtxs [mkDecl x tyA, Def x a] $
-          checkType b ty' 
+          checkType b ty'
     -- c-refl
     Refl -> case ty' of 
             (TyEq a b) -> Equal.equate a b
             _ -> Env.err [DS "Refl annotated with invalid type", DD ty']
     -- c-subst
     (Subst a b) -> do
-      -- infer the type of the proof 'b'
       tp <- inferType b
-      -- make sure that it is an equality between m and n
+      l_tp <- tcType tp
       nf <- Equal.whnf tp
       (m, n) <- case nf of 
                   TyEq m n -> return (m,n)
                   _ -> Env.err [DS "Subst requires an equality type, not", DD tp]
-      -- if either side is a variable, add a definition to the context
+      _ <- inferType m >>= tcType
+      _ <- inferType n >>= tcType
       edecl <- Equal.unify [] m n
-      -- if proof is a variable, add a definition to the context
       pdecl <- Equal.unify [] b Refl
       Env.extendCtxs (edecl ++ pdecl) $ checkType a ty'
     -- c-contra 
     (Contra p) -> do
-      ty' <- inferType p
-      nf <- Equal.whnf ty'
+      ty_p <- inferType p
+      nf <- Equal.whnf ty_p
       (a, b) <- case nf of 
                   TyEq m n -> return (m,n)
-                  _ -> Env.err [DS "Contra requires an equality type, not", DD ty']
+                  _ -> Env.err [DS "Contra requires an equality type, not", DD ty_p]
+      _ <- inferType a >>= tcType
+      _ <- inferType b >>= tcType
       a' <- Equal.whnf a
       b' <- Equal.whnf b
       case (a', b') of
-        
-
         (LitBool b1, LitBool b2)
           | b1 /= b2 ->
             return ()
@@ -243,9 +263,7 @@ checkType tm ty = do
     -- c-infer
     _ -> do
       tyA <- inferType tm
-      Equal.equate tyA ty'
-    
-
+      Equal.equate tyA ty'  -- Use Equal.equate to handle universe cumulativity
 
 
 --------------------------------------------------------
