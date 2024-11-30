@@ -1,0 +1,5 @@
+module Maybe where
+
+data Maybe (T: Type): Type :=
+  Nothing: Maybe T
+  Some (T): Maybe T

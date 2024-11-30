@@ -67,7 +67,7 @@ tests =
 
 examples :: TestTree
 examples =
-  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos", "List", "Sigma"])
+  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma"])
    in testGroup
         "Examples"
         [ dataExamples

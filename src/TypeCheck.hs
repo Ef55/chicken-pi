@@ -17,6 +17,7 @@ import Text.PrettyPrint.HughesPJ (render, ($$))
 import Unbound.Generics.LocallyNameless (string2Name)
 import Unbound.Generics.LocallyNameless qualified as Unbound
 import Unbound.Generics.LocallyNameless.Internal.Fold qualified as Unbound
+import qualified Unbound.Generics.LocallyNameless.Unsafe as Unbound
 
 ---------------------------------------------------------------------
 
@@ -348,6 +349,16 @@ data HintOrCtx
   = AddHint TypeDecl
   | AddCtx [Entry]
 
+teleToPi :: Telescope -> Type -> Type
+teleToPi t r = iter t
+  where
+    iter :: Telescope -> Type
+    iter Empty = r
+    iter (Tele bnd) = do
+      let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+          b = iter t'
+        in TyPi Rel xType (Unbound.bind x b)
+
 -- | Check each sort of declaration in a module
 tcEntry :: Entry -> TcMonad HintOrCtx
 tcEntry (Def n term) = do
@@ -385,51 +396,47 @@ tcEntry (Decl decl) = do
   tcType (declType decl)
   return $ AddHint decl
 tcEntry (Demote ep) = return (AddCtx [Demote ep])
-tcEntry dat@(Data (TypeConstructor typ sort pack)) = do
+tcEntry dat@(Data tc@(TypeConstructor typ sort pack)) = do
   unless (isSort sort) $ Env.err [DD typ, DS "is not a sort."]
   (params, constructors) <- Unbound.unbind pack
   let td = TypeDecl typ Rel (teleToPi params sort)
   duplicateTypeBindingCheck td
-  cstrs <- Env.extendCtx (Decl td) $ underTelescope params $ \p -> tcConstructors typ p constructors
+  cstrs <- Env.extendCtx (Decl td) $ underTelescope params $ \p -> tcConstructors tc p constructors
   return $ AddCtx (dat : Decl td : cstrs)
   where
-    teleToPi :: Telescope -> Type -> Type
-    teleToPi Empty r = r
-    teleToPi (Tele bnd) r = do
-      let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
-          b = teleToPi t' r
-       in TyPi Rel xType (Unbound.bind x b)
 
-    underTelescope :: Telescope -> ([TName] -> TcMonad a) -> TcMonad a
+    underTelescope :: Telescope -> ([(TName, Type)] -> TcMonad a) -> TcMonad a
     underTelescope t k = iter [] t
       where
         iter p Empty = k (reverse p)
         iter p (Tele bnd) = do
           let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
-          Env.extendCtxs [mkDecl x xType] $ iter (x : p) t'
+          Env.extendCtxs [mkDecl x xType] $ iter ((x, xType) : p) t'
 
-    tcConstructors :: TName -> [TName] -> [Constructor] -> TcMonad [Entry]
+    tcConstructors :: TypeConstructor -> [(TName, Type)] -> [Constructor] -> TcMonad [Entry]
     tcConstructors _ _ [] = return []
     tcConstructors typ params (h : t) = do
       h' <- tcConstructor typ params h
       t' <- tcConstructors typ params t
       return (Decl h' : t')
 
-tcConstructor :: TName -> [TName] -> Constructor -> TcMonad TypeDecl
-tcConstructor dataTypeName params (Constructor name cstrType) = do
+tcConstructor :: TypeConstructor -> [(TName, Type)] -> Constructor -> TcMonad TypeDecl
+tcConstructor (TypeConstructor dataTypeName _ cstrs) params (Constructor name cstrType) = do
   (tele, r) <- Unbound.unbind cstrType
   typ <- checkTelescope tele $ checkConstructor r
-  return $ TypeDecl name Rel typ
+  -- (telescope, _) <- Unbound.unbind cstrs
+  let typ' = foldr (\(b, bT) t -> TyPi Rel bT $ Unbound.bind b t) typ params
+  return $ TypeDecl name Rel typ' 
   where
     checkConstructor :: Type -> TcMonad Type
     checkConstructor t = do
       (tName, args) <- Equal.unconstruct t
-      unless ((length params <= length args) && all (uncurry aeq) (zip (Var <$> params) (take (length params) args))) $
+      unless ((length params <= length args) && all (uncurry aeq) (zip (Var . fst <$> params) (take (length params) args))) $
         Env.err
           [ DS $ "The first " ++ (show . length) params ++ " argument(s) of the type of constructor",
             DD name,
             DS "should be",
-            DL $ DD <$> params,
+            DL $ DD . fst <$> params,
             DS "found",
             DL $ DD <$> args
           ]
@@ -441,7 +448,8 @@ tcConstructor dataTypeName params (Constructor name cstrType) = do
           ]
       -- which must be the type being defined.
       if tName == dataTypeName
-        then return $ foldl App (Var tName) (Arg Rel <$> args)
+        then
+          return $ foldl App (Var tName) (Arg Rel <$> args)
         else
           Env.err
             [ DS "The constructor",

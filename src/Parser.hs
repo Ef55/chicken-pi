@@ -13,7 +13,7 @@ where
 
 import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.State.Lazy hiding (join)
-import Data.List (foldl')
+import Data.List (foldl', intercalate)
 import LayoutToken qualified as Token
 import Syntax hiding (moduleImports)
 import Text.Parsec hiding (Empty, State)
@@ -175,7 +175,7 @@ piforallStyle =
           "()"
         ],
       Token.reservedOpNames =
-        ["!", "?", "\\", ":", ".", ",", "<", "=", "+", "-", "*", "^", "()", "_", "|", "{", "}", ":="]
+        ["!", "?", "\\", ":", ".", ",", "<", "=", "+", "-", "*", "^", "()", "_", "|", "{", "}", ":=", "/"]
     }
 
 tokenizer :: Token.GenTokenParser String [Column] (Unbound.FreshM)
@@ -235,7 +235,7 @@ moduleDef = do
 importDef :: LParser ModuleImport
 importDef = do reserved "import" >> (ModuleImport <$> importName)
   where
-    importName = identifier
+    importName = intercalate "/" <$> sepBy1 identifier (reservedOp "/")
 
 ---
 --- Top level declarations

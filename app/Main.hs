@@ -53,9 +53,10 @@ putTypeError typeError = do
 -- | Type check the given file    
 goFilename :: String -> IO ()  
 goFilename pathToMainFile = do
-  let prefixes = [currentDir, mainFilePrefix]
+  let prefixes = [currentDir, dataDir, mainFilePrefix]
       (mainFilePrefix, name) = splitFileName pathToMainFile
-      currentDir = "" 
+      currentDir = "./" 
+      dataDir = currentDir ++ "pi/Data/"
   putStrLn $ "processing " ++ name ++ "..."
   v <- runExceptT (getModules prefixes name)
   val <- v `exitWith` putParseError

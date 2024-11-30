@@ -1,8 +1,18 @@
 module List where
 
+import Nat
+import Maybe
+
 data List (T: Type) : Type :=
   Nil: List T
   Cons (h: T) (t: List T) : List T
+
+nth : (S: Type) -> List S -> Nat -> Maybe S
+nth = \S ls n . case ls of
+  Nil -> Nothing S
+  Cons h t -> case n of
+              Z -> Some S h
+              S n' -> nth S t n'
 
 foldLeft : (U: Type) -> (S: Type) -> (S -> U -> S) -> S -> List U -> S
 foldLeft = \U S f s ts . case ts of
