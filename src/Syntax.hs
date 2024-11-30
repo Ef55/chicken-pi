@@ -41,14 +41,13 @@ data Level
   | LVar String           -- ^ Level variables for polymorphic levels
   | LMax Level Level      -- ^ Maximum of two levels
   | LPlus Level Integer   -- ^ Level plus a constant
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, Ord)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
 -- | Because types and terms use the same AST, we define the following
 -- type synonym so that we can hint whether a piece of syntax is being used
 -- as a type or as a term.
 type Type = Term
-
 
 -- | basic language
 data Term

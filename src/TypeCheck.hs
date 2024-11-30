@@ -80,15 +80,15 @@ inferType a = case a of
     l1 <- tcType tyA
     Env.extendCtx (mkDecl x tyA) $ do
       l2 <- tcType tyB
-      let l = LMax l1 l2
+      let l = imax l1 l2
       return (TyType l)
 
   -- i-eq
   (TyEq a b) -> do
     aTy <- inferType a
     checkType b aTy
-    l <- tcType aTy
-    return (TyType l)
+    return Prop
+
   (Case scrut (Just ret) branches) -> do
     checkMatch scrut ret branches
     return ret
@@ -191,21 +191,18 @@ checkType tm ty = do
     -- c-lam: check the type of a function
     (Lam ep1 bnd) -> case ty' of
       (TyPi ep2 tyA bnd2) -> do
-        -- unbind the variables in the lambda expression and pi type
+        -- unbind variables and check the body
         (x, body, tyB) <- unbind2 bnd bnd2
-        -- epsilons should match up
-        unless (ep1 == ep2) $
-          Env.err
-            [ DS "In function definition, expected",
-              DD ep2,
-              DS "parameter",
-              DD x,
-              DS "but found",
-              DD ep1,
-              DS "instead."
-            ]
-        -- check the type of the body of the lambda expression
-        Env.extendCtx (Decl (TypeDecl x ep1 tyA)) (checkType body tyB)
+        -- check that ep1 == ep2
+        unless (ep1 == ep2) $ Env.err [DS "In function definition, expected", DD ep2, DS "parameter", DD x, 
+                                      DS "but found", DD ep1, DS "instead."] 
+        l1 <- tcType tyA
+        Env.extendCtx (Decl (TypeDecl x ep1 tyA)) $ do
+          -- Check the body
+          checkType body tyB
+          -- Ensure that tyB is a valid type
+          l2 <- tcType tyB
+          return ()
       _ -> Env.err [DS "Lambda expression should have a function type, not", DD ty']
     -- Practicalities
     (Pos p a) ->
