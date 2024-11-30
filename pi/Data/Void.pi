@@ -1,0 +1,6 @@
+module Void where
+
+data Void : Type := {}
+
+exfalso : (A: Type) -> Void -> A
+exfalso = \ A v . case v of {}

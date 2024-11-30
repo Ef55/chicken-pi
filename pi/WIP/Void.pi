@@ -1,6 +1,0 @@
-module Void where
-
-data Void : Type0 = {}
-
-exfalso : (A: Type1000) -> Void -> A
-exfalso = \ A v . case v of {}
