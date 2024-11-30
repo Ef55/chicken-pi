@@ -99,15 +99,14 @@ inferType a = case a of
     l1 <- tcType tyA
     Env.extendCtx (mkDecl x tyA) $ do
       l2 <- tcType tyB
-      let l = LMax l1 l2
+      let l = imax l1 l2
       return (TyType l)
 
   -- i-eq
   (TyEq a b) -> do
     aTy <- inferType a
     checkType b aTy
-    l <- tcType aTy
-    return (TyType l)
+    return Prop
 
   -- cannot synthesize the type of the term
   _ -> 
@@ -125,7 +124,6 @@ tcType tm = Env.withStage Irr $ do
     TyType l -> return l
     _ -> Env.err [DS "Expected", DD tm, DS "to have type 'Type l' for some level l, but found", DD ty']
 
-
 -------------------------------------------------------------------------
 -- | Check that the given term has the expected type
 checkType :: Term -> Type -> TcMonad ()
@@ -133,36 +131,41 @@ checkType tm ty = do
   ty' <- Equal.whnf ty 
   case tm of 
     -- c-lam: check the type of a function
-    (Lam ep1  bnd) -> case ty' of
+    (Lam ep1 bnd) -> case ty' of
       (TyPi ep2 tyA bnd2) -> do
-        -- unbind the variables in the lambda expression and pi type
+        -- unbind variables and check the body
         (x, body, tyB) <- unbind2 bnd bnd2
--- epsilons should match up
+        -- check that ep1 == ep2
         unless (ep1 == ep2) $ Env.err [DS "In function definition, expected", DD ep2, DS "parameter", DD x, 
                                       DS "but found", DD ep1, DS "instead."] 
-        -- check the type of the body of the lambda expression
-        Env.extendCtx (Decl (TypeDecl x ep1 tyA)) (checkType body tyB)
+        l1 <- tcType tyA
+        Env.extendCtx (Decl (TypeDecl x ep1 tyA)) $ do
+          -- Check the body
+          checkType body tyB
+          -- Ensure that tyB is a valid type
+          l2 <- tcType tyB
+          return ()
       _ -> Env.err [DS "Lambda expression should have a function type, not", DD ty']
-
     -- Practicalities
     (Pos p a) -> 
       Env.extendSourceLocation p a $ checkType a ty'
-
     TrustMe -> return ()
-
     PrintMe -> do
       gamma <- Env.getLocalCtx
       Env.warn [DS "Unmet obligation.\nContext:", DD gamma,
             DS "\nGoal:", DD ty']  
-
     -- Extensions to the core language
     -- c-if
     (If a b1 b2) -> do
       checkType a TyBool
       dtrue <- Equal.unify [] a (LitBool True)
       dfalse <- Equal.unify [] a (LitBool False)
-      Env.extendCtxs dtrue $ checkType b1 ty'
-      Env.extendCtxs dfalse $ checkType b2 ty' 
+      tyB1 <- Env.extendCtxs dtrue $ inferType b1
+      tyB2 <- Env.extendCtxs dfalse $ inferType b2
+      -- Ensure that tyB1 and tyB2 are equal
+      Equal.equate tyB1 tyB2
+      -- Ensure that the expected type ty' matches tyB1 (or tyB2)
+      Equal.equate ty' tyB1
     -- c-prod
     (Prod a b) -> do
       case ty' of

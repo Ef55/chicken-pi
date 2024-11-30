@@ -11,6 +11,17 @@ import qualified Unbound.Generics.LocallyNameless as Unbound
 
 import Control.Monad.Except (unless, catchError, zipWithM, zipWithM_)
 
+-- | Compare two levels for equality, using <= to account for universe cumulativity
+equateLevels :: Level -> Level -> TcMonad ()
+equateLevels l1 l2 = do
+  if l1 <= l2
+    then return ()
+    else do
+      gamma <- Env.getLocalCtx
+      Env.err [DS "Universe level mismatch: expected level", DS (show l2),
+               DS "but found level", DS (show l1),
+               DS "in context:", DD gamma]
+
 -- | compare two expressions for equality
 -- first check if they are alpha equivalent then
 -- if not, weak-head normalize and compare
@@ -21,7 +32,8 @@ equate t1 t2 = do
   n1 <- whnf t1  
   n2 <- whnf t2
   case (n1, n2) of 
-    (TyType _, TyType _) -> return ()
+    (TyType l1, TyType l2) -> do
+      equateLevels l1 l2
     (Var x,  Var y) | x == y -> return ()
     (Lam ep1 bnd1, Lam ep2 bnd2) -> do
       (_, b1, b2) <- unbind2 bnd1 bnd2

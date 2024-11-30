@@ -203,10 +203,6 @@ variable =
   do i <- identifier
      return $ Unbound.string2Name i
 
-
-
-
-
 colon, dot, comma :: LParser ()
 colon = Token.colon tokenizer >> return ()
 dot = Token.dot tokenizer >> return ()
@@ -220,8 +216,6 @@ parens, brackets, braces :: LParser a -> LParser a
 parens = Token.parens tokenizer
 brackets = Token.brackets tokenizer
 braces = Token.braces tokenizer
-
-
 
 moduleImports :: LParser Module
 moduleImports = do
