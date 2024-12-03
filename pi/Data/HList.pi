@@ -1,0 +1,14 @@
+module HList where
+import List
+
+data HList: List Type -> Type :=
+  HNil : HList (Nil Type)
+  HCons (T: Type) (T) (Ts: List Type) (HList Ts): HList (Cons Type T Ts)
+
+hconcat :
+  (Ls: List Type) -> (Rs: List Type) ->
+  (l: HList Ls) -> (r: HList Rs) -> 
+  HList (concat Type Ls Rs)
+hconcat = \Ls Rs l r . case l in HList Ls_ return HList (concat Type Ls_ Rs) of
+  HNil -> r
+  HCons HL hl Ls' l' -> HCons HL hl (concat Type Ls' Rs) (hconcat Ls' Rs l' r)

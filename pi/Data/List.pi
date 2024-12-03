@@ -18,3 +18,11 @@ foldLeft : (U: Type) -> (S: Type) -> (S -> U -> S) -> S -> List U -> S
 foldLeft = \U S f s ts . case ts of
   Nil -> s
   Cons t ts' -> foldLeft U S f (f s t) ts'
+
+foldRight : (U: Type) -> (S: Type) -> (U -> S -> S) -> S -> List U -> S
+foldRight = \U S f s ts . case ts of
+  Nil -> s
+  Cons t ts' -> f t (foldRight U S f s ts')
+
+concat : (U: Type) -> List U -> List U -> List U
+concat = \U l r . foldRight U (List U) (Cons U) r l

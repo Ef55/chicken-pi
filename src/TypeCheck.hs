@@ -247,7 +247,7 @@ checkType tm ty = do
     -- Practicalities
     (Pos p a) ->
       Env.extendSourceLocation p a $ checkType a ty'
-    TrustMe -> return ()
+    TrustMe -> Env.warn [ DS "Unmet obligation." ]
     PrintMe -> do
       gamma <- Env.getLocalCtx
       Env.warn

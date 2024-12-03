@@ -1,10 +1,24 @@
 module Maybe where
 
+import Fun
+
 data Maybe (T: Type): Type :=
   Nothing: Maybe T
   Some (T): Maybe T
 
-mapMaybe: (S: Type) -> (T: Type) -> (S -> T) -> Maybe S -> Maybe T
-mapMaybe = \_ T f m . case m of
+maybe_return : (T: Type) -> T -> Maybe T
+maybe_return = \T t . Some T t
+
+maybe_map: (S: Type) -> (T: Type) -> (S -> T) -> Maybe S -> Maybe T
+maybe_map = \_ T f m . case m of
   Nothing -> Nothing T
   Some s -> Some T (f s)
+
+maybe_monadAssoc:
+  (S: Type) -> (T: Type) -> (U: Type) ->
+  (m: Maybe S) ->
+  (f: S -> T) -> (g: T -> U) ->
+  maybe_map T U g (maybe_map S T f m) = maybe_map S U (fcomp S T U f g) m
+maybe_monadAssoc = \S T U m f g . case m of
+  Nothing -> Refl
+  Some s -> Refl

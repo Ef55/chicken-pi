@@ -1,0 +1,7 @@
+module Fun where
+
+fcomp :
+  (S: Type) -> (T: Type) -> (U: Type) ->
+  (S -> T) -> (T -> U) ->
+  S -> U
+fcomp = \_ _ _ f g s . g (f s)
