@@ -27,6 +27,7 @@ module Environment
     Err (..),
     withStage,
     checkStage,
+    freshWildcard,
   )
 where
 
@@ -37,20 +38,21 @@ import Control.Monad.Except
     runExceptT,
     unless,
   )
+import Control.Monad.Identity
+import Control.Monad.RWS (MonadWriter, tell)
 import Control.Monad.Reader
   ( MonadReader (local),
     ReaderT (runReaderT),
     asks,
   )
+import Control.Monad.Trans.Writer (WriterT (runWriterT))
+import Data.Kind (Type)
 import Data.Maybe (listToMaybe)
 import GHC.Base (Alternative ((<|>)))
 import PrettyPrint (D (..), Disp (..), Doc, SourcePos, render)
 import Syntax
 import Text.PrettyPrint.HughesPJ (nest, sep, text, vcat, ($$))
 import Unbound.Generics.LocallyNameless qualified as Unbound
-import Control.Monad.Identity
-import Control.Monad.Trans.Writer (WriterT (runWriterT))
-import Control.Monad.RWS (MonadWriter, tell)
 
 -- | The type checking Monad includes a reader (for the
 -- environment), freshness state (for supporting locally-nameless
@@ -68,7 +70,10 @@ runTcMonad env m =
       m3 = runExceptT m2
       m4 = runWriterT m3
       m5 = runIdentity m4
-  in m5
+   in m5
+
+freshWildcard :: TcMonad TName
+freshWildcard = Unbound.fresh (Unbound.string2Name "_")
 
 -- | Marked locations in the source code
 data SourceLocation where
@@ -136,8 +141,6 @@ lookupTyMaybe v = do
     testDecl :: TypeDecl -> Maybe TypeDecl
     testDecl decl =
       if v == declName decl then Just decl else Nothing
-
-
 
 demoteDecl :: Epsilon -> TypeDecl -> TypeDecl
 demoteDecl ep s = s {declEp = min ep (declEp s)}

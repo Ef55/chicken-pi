@@ -1,0 +1,7 @@
+module Fin where
+
+import Nat
+
+data Fin : Nat -> Type :=
+  Fz (n: Nat) : Fin (S n)
+  Fs (n: Nat) (Fin n): Fin (S n)

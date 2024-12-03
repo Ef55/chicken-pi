@@ -31,8 +31,8 @@ tests =
           positiveTests "test/Data" ["Dependent", "MultiParams"]
             ++ negativeTests
               "test/Data"
-              [ ("Constructors must be for the type being defined", "DefinesOtherType", "C1.*should be.*D1.*D0 found"),
-                ("Constructors must fully apply the type being defined", "NotFullyApplied", "first 3 argument.*should be S T U.*found S T")
+              [ ("Constructors must be for the type being defined", "DefinesOtherType", "C1.*has type D0.*should be constructor for D1"),
+                ("Constructors must fully apply the type being defined", "NotFullyApplied", "should have type.*fully applied?")
               ]
       matchingTests = testGroup "Matching" (positiveTests "test/Matching" ["Subst", "Eval", "Wildcard"])
       positivityTests =
@@ -52,8 +52,8 @@ tests =
             [ ("Non exhaustive pattern matching", "NonExhaustive", "pattern matching.*2 branches.*3 constructors"),
               ("Unordered pattern matching", "UnorderedPatterns", "Three.*Two was expected"),
               ("Wildcard is not a variable", "WildcardVar", "expecting a variable"),
-              ("Missing variable in pattern", "InvalidPattern1", "too few variables.*\\(_:Unit\\)"),
-              ("Extra variable in pattern", "InvalidPattern2", "too many variables.*u4.*unused"),
+              ("Missing variable in pattern", "InvalidPattern1", "Instantiation of constructor One.*u0 u1"), -- "too few variables.*\\(_:Unit\\)"
+              ("Extra variable in pattern", "InvalidPattern2", "Instantiation of constructor One.*u0 u1 u3 u4"), -- "too many variables.*u4.*unused"
               ("Dependent wildcard must not be confused", "DependentWildcardConfusion", "")
             ]
    in testGroup
@@ -67,7 +67,7 @@ tests =
 
 examples :: TestTree
 examples =
-  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma"])
+  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma", "Fin", "Vect"])
    in testGroup
         "Examples"
         [ dataExamples

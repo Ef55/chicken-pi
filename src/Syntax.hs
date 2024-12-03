@@ -76,7 +76,7 @@ data Term
   | -- | witness to an equality contradiction
     Contra Term
   | -- | pattern matching
-    Case Term (Maybe Term) [Branch]
+    Case Term (Unbound.Bind (Maybe Pattern) (Maybe Term, [Branch]))
   deriving (Show, Generic)
 
 newtype Branch = Branch {getBranch :: Unbound.Bind Pattern Term}

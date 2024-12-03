@@ -9,4 +9,4 @@ fst = \ A B s . case s of
 
 snd : (A: Type) -> (B: A -> Type) -> (s: Sigma A B) -> B (fst A B s)
 snd = \ A B s . case s of
-  Prod _ b -> b
+  Prod a b -> b

@@ -428,14 +428,22 @@ patternMatching :: LParser Term
 patternMatching = do
   reserved "case"
   scrutinee <- term
+  inClause <- option Nothing $ try (do
+            reserved "in"
+            (constructor, bindings) <- simplePattern
+            return $ Just $ PatCon constructor bindings)
   ret <- Just <$> try (reserved "return" >> term) <|> pure Nothing
   reserved "of"
   branches <- layout branch (return ())
-  return $ Case scrutinee ret branches
+  return $ Case scrutinee (Unbound.bind inClause (ret, branches))
   where
-    branch = do
+    simplePattern = do
       constructor <- identifier
       bindings <- many varOrWildcard
+      return (constructor, bindings)
+
+    branch = do
+      (constructor, bindings) <- simplePattern
       reservedOp "->"
       body <- term
       return $ Branch $ Unbound.bind (PatCon constructor bindings) body

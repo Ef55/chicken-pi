@@ -3,3 +3,8 @@ module Maybe where
 data Maybe (T: Type): Type :=
   Nothing: Maybe T
   Some (T): Maybe T
+
+mapMaybe: (S: Type) -> (T: Type) -> (S -> T) -> Maybe S -> Maybe T
+mapMaybe = \_ T f m . case m of
+  Nothing -> Nothing T
+  Some s -> Some T (f s)

@@ -13,6 +13,8 @@ import Text.PrettyPrint (Doc, ($$), (<+>))
 import Text.PrettyPrint qualified as PP
 import Unbound.Generics.LocallyNameless qualified as Unbound
 import Unbound.Generics.LocallyNameless.Internal.Fold (toListOf)
+import GHC.Base (Alternative((<|>)))
+import qualified Data.Maybe as Maybe
 
 -------------------------------------------------------------------------
 
@@ -467,14 +469,20 @@ instance Display Term where
     p <- ask prec
     dty <- display ty
     return $ parens (levelPi < p) $ PP.text "contra" <+> dty
-  display (Case scrut ret cases) = do
+  display (Case scrut cases) = Unbound.lunbind cases $ \(inClause, (ret, cases)) -> do
     p <- asks prec
     ds <- withPrec 0 $ display scrut
+    di <- case inClause of
+      Nothing -> return PP.empty
+      (Just (PatCon inType args)) -> do
+        dt <- display inType
+        da <- mapM display args
+        return $ PP.text "in" <+> dt <+> PP.vcat da
     dr <- case ret of
             Just ret -> withPrec 0 $ display ret
             Nothing -> const PP.empty
     db <- withPrec 0 $ mapM (display . getBranch) cases
-    let top = PP.text "case" <+> ds <+> PP.text "return" <+> dr <+> PP.text "of"
+    let top = PP.text "case" <+> ds <+> di <+> PP.text "return" <+> dr <+> PP.text "of"
     return $
       parens (levelCase < p) $
         if null cases then top <+> PP.text "{ }" else top $$ PP.nest 2 (PP.vcat db)

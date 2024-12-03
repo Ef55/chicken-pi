@@ -6,5 +6,5 @@ data Data : Type :=
 Y : Data -> Type
 Y = \d . case d of C _ _ y _ -> y
 
-f : (d: Data) -> Y d
-f = \d . case d of C _ x _ f -> f x
+fa : (d: Data) -> Y d
+fa = \d . case d of C _ x _ f -> f x

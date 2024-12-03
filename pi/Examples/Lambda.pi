@@ -1,0 +1,57 @@
+module Lambda where
+
+import Unit
+import Bool
+import Nat
+import Maybe
+import List
+
+-- Is is truly a programming language if no one implemented a typechecker
+-- for the Simply Typed Lambda Calculus (STLC) in it?
+
+data LType: Type :=
+  Ground: LType
+  Arrow (LType) (LType): LType
+
+-- Oh, and we will define the syntax using
+-- Parametric Higher-Order Abstract Syntax (PHOAS), following the presentation in
+-- << Chlipala, Adam. "Parametric higher-order abstract syntax for mechanized semantics." >>
+data LTerm_ (V: Type): Type :=
+  Cst: LTerm_ V
+  Var (V): LTerm_ V
+  Abs (V -> LTerm_ V): LTerm_ V
+  App (LTerm_ V) (LTerm_ V): LTerm_ V
+
+LTerm : Type
+LTerm = (V: Type) -> LTerm_ V
+
+isValue : LTerm -> Bool
+isValue = \t . case t Unit of
+  Cst -> True
+  Var _ -> False
+  Abs _ -> True
+  App _ _ -> False
+
+LTerm1 : Type
+LTerm1 = (V: Type) -> V -> LTerm_ V
+
+subst_ : (V: Type) -> LTerm_ (LTerm_ V) -> LTerm_ V
+subst_ = \V t . case t of
+  Cst -> Cst V
+  Var e -> e
+  Abs f -> Abs V (\x . subst_ V (f (Var V x)))
+  App l r -> App V (subst_ V l) (subst_ V r)
+
+lsubst : LTerm1 -> LTerm -> LTerm
+lsubst = \f a V. subst_ V ((f (LTerm_ V)) (a V))
+
+cbvStep_ : (V: Type) -> LTerm_ V -> Maybe (LTerm_ V)
+cbvStep_ = \V t . case t of
+  Cst -> Nothing (LTerm_ V)
+  Var _ -> Nothing (LTerm_ V)
+  Abs _ -> Nothing (LTerm_ V)
+  App l r -> case l of
+    Cst -> Nothing (LTerm_ V)
+    Var _ -> Nothing (LTerm_ V)
+    Abs f -> Some (subst_ (f (LTerm_ V) r))
+    App l' r' -> mapMaybe (LTerm_ V) (LTerm_ V) (\l'' . App V (App V l'' r') r) (cbvStep_ V l')

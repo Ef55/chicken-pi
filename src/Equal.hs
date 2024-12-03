@@ -6,11 +6,11 @@ module Equal
     equate,
     unify,
     unconstruct,
-    -- teleToPi
+    instantiateConstructorType
   )
 where
 
-import Control.Monad (guard, when)
+import Control.Monad (foldM, guard, when)
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.Except
   ( MonadError,
@@ -19,7 +19,8 @@ import Control.Monad.Except
     zipWithM_,
   )
 import Control.Monad.RWS (MonadReader)
-import Environment (D (DD, DS), Env, Err, TcMonad)
+import Data.Maybe qualified as Maybe
+import Environment (D (DD, DS, DL), Env, Err, TcMonad)
 import Environment qualified as Env
 import GHC.Base (Alternative ((<|>)))
 import Syntax
@@ -76,21 +77,23 @@ equate t1 t2 = do
       equate pf1 pf2
     (Contra a1, Contra a2) ->
       equate a1 a2
-    (Case s1 _ b1s, Case s2 _ b2s) -> do
+    -- For case _ of, we ignore the annotations (i.e. the matched type & return)
+    (Case s1 b1s, Case s2 b2s) -> do
       equate s1 s2
-      when (length b1s /= length b2s) (tyErr n1 n2)
-      mapM_
-        ( \(bn1, bn2) -> do
-            m <- Unbound.unbind2 (getBranch bn1) (getBranch bn2)
-            case m of
-              Nothing -> do
-                -- b1 <- Unbound.unbind (getBranch bn1)
-                -- b2 <- Unbound.unbind (getBranch bn2)
-                -- tyErr (fst b1) (fst b2)
-                tyErr n1 n2
-              Just (_, b1, _, b2) -> equate b1 b2
-        )
-        (zip b1s b2s)
+      m <- Unbound.unbind2 b1s b2s
+      case m of
+        Nothing -> tyErr n1 n2
+        Just (_, (_, b1s), _, (_, b2s)) -> do
+          when (length b1s /= length b2s) (tyErr n1 n2)
+          mapM_
+            ( \(bn1, bn2) -> do
+                m <- Unbound.unbind2 (getBranch bn1) (getBranch bn2)
+                case m of
+                  Nothing -> do
+                    tyErr n1 n2
+                  Just (_, b1, _, b2) -> equate b1 b2
+            )
+            (zip b1s b2s)
     (_, _) -> tyErr n1 n2
   where
     tyErr n1 n2 = do
@@ -158,12 +161,14 @@ whnf (LetPair a bnd) = do
     Prod b1 c -> do
       whnf (Unbound.instantiate bnd [b1, c])
     _ -> return (LetPair nf bnd)
-whnf (Case s r branches) = do
+whnf c@(Case s bBranches) = do
   ns <- whnf s
-  sb <- pickBranch ns branches
+  (bnds, (_, branches)) <- Unbound.unbind bBranches
+  let inVars = maybe [] (\(PatCon _ v) -> v) bnds
+  sb <- pickBranch ns inVars branches
   case sb of
     Just (b, s) -> whnf $ Unbound.substs s b
-    Nothing -> return $ Case ns r branches
+    Nothing -> return $ Case ns bBranches
 
 -- ignore/remove type annotations and source positions when normalizing
 whnf (Ann tm _) = whnf tm
@@ -184,25 +189,31 @@ whnf tm = return tm
 -- If a match is found, return the body of the matched branch, as well as
 -- the (set of) bindings defined in the pattern.
 pickBranch ::
-  forall m.
-  (MonadError Err m, MonadReader Env m, Unbound.Fresh m) =>
   Term ->
+  [TName] ->
   [Branch] ->
-  m (Maybe (Term, [(TName, Term)]))
-pickBranch s branches = do
+  TcMonad (Maybe (Term, [(TName, Term)]))
+pickBranch s inBindings branches = do
   c <- unconstruct s
   r <- mapM (tryBranch c) branches
   return $ foldl (<|>) Nothing r
   where
-    tryBranch :: (TName, [Term]) -> Branch -> m (Maybe (Term, [(TName, Term)]))
+    tryBranch :: (TName, [Term]) -> Branch -> TcMonad (Maybe (Term, [(TName, Term)]))
     tryBranch (constructor, args) bnd = do
-      (PatCon cstr params, b) <- Unbound.unbind (getBranch bnd)
-      let subst = zip params args
-      return $
-        if constructor == Unbound.string2Name cstr
-          && length params == length args
-          then Just (b, subst)
-          else Nothing
+      (PatCon cstrStr patVars, b) <- Unbound.unbind (getBranch bnd)
+      let cstr :: TName = Unbound.string2Name cstrStr
+      typeArgs <- maybeInstantiateConstructorType cstr args
+      if constructor == cstr
+        then do
+          return
+            ( ( \typeArgs ->
+                  let substPat = zip patVars (drop (length args - length patVars) args)
+                      substIn = zip inBindings typeArgs
+                   in (b, substPat ++ substIn)
+              )
+                <$> typeArgs
+            )
+        else return Nothing
 
 -- | 'Unify' the two terms, producing a list of definitions that
 -- must hold for the terms to be equal
@@ -260,20 +271,56 @@ amb _ = False
 
 -- | "Unconstruct" an applied constructor (or function, but
 -- why would you do that?), and return its name and arguments.
-unconstruct ::
-  forall m.
-  (MonadError Err m, MonadReader Env m) =>
+maybeUnconstruct ::
   Term ->
-  m (TName, [Term])
-unconstruct term0 = iter (strip term0) []
+  Maybe (TName, [Term])
+maybeUnconstruct term0 = iter (strip term0) []
   where
-    iter :: Term -> [Term] -> m (TName, [Term])
+    iter :: Term -> [Term] -> Maybe (TName, [Term])
     iter term acc = case term of
       App l (Arg _ r) -> iter l (r : acc)
       (Var name) -> return (name, acc)
+      _ -> Nothing
+
+unconstruct ::
+  Term ->
+  TcMonad (TName, [Term])
+unconstruct term = case maybeUnconstruct term of
+  Just v -> return v
+  _ ->
+    Env.err
+      [ DS "Expected constructor at head",
+        DD term,
+        DS "is not a sequence of applications headed by a variable."
+      ]
+
+maybeInstantiateConstructorType :: TName -> [Term] -> TcMonad (Maybe [Term])
+maybeInstantiateConstructorType cstrName args = do
+  (TypeDecl _ _ typ) <- Env.lookupTy cstrName
+  let app =
+        foldM
+          ( \f a -> case f of
+              TyPi _ _ bnd -> return $ Unbound.instantiate bnd [a]
+              _ -> Nothing
+          )
+          typ
+          args
+  case app of
+    Nothing -> return Nothing
+    Just app -> do
+      red <- whnf app
+      return $ snd <$> maybeUnconstruct red
+
+instantiateConstructorType :: TName -> [Term] -> TcMonad [Term]
+instantiateConstructorType name args =
+  maybeInstantiateConstructorType name args >>= \r ->
+    case r of
+      Just v -> return v
       _ ->
         Env.err
-          [ DS "Expected constructor at head",
-            DD term0,
-            DS "is not a sequence of applications headed by a variable."
+          [ DS "Instantiation of constructor",
+            DD name,
+            DS "with arguments",
+            DL $ DD <$> args,
+            DS "failed."
           ]
