@@ -35,14 +35,45 @@ type TName = Unbound.Name Term
 
 -----------------------------------------
 
--- | Universe levels
+-- | "Constant" levels
 data Level
-  = LConst Integer        -- ^ Constant levels like 0, 1, 2, ...
-  | LVar String           -- ^ Level variables for polymorphic levels
-  | LMax Level Level      -- ^ Maximum of two levels
-  | LPlus Level Integer   -- ^ Level plus a constant
-  deriving (Show, Eq, Generic, Ord)
+  = LProp -- ^ The non-computational level 0
+  | LSet -- ^ The computational level 0
+  | LConst Integer -- ^ Constant levels like 1, 2, ... (Type i in Coq's vocabulary)
+  deriving (Show, Eq, Generic)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
+instance Ord Level where
+  LProp <= LProp = True
+  LSet <= LSet = True
+  LProp <= LConst _ = True
+  LSet <= LConst _ = True
+  LConst n <= LConst m = n <= m
+  _ <= _ = False
+
+-- Only allowing positive shifts simplifies things greatly
+levelAdd :: Level -> Integer -> Level
+levelAdd l i
+  | i < 0 = error "Cannot offset universes by non-negative amounts"
+  | i == 0 = l
+  | otherwise = case l of
+      LProp -> LConst i
+      LSet -> LConst i
+      LConst j -> LConst (i + j)
+
+-- data LevelExpr
+--   = LEConst Level
+--   | LMax LevelExpr LevelExpr
+--   | LPlus LevelExpr Integer
+--   deriving (Show, Eq, Generic)
+--   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
+
+-- evalLevelExpr :: LevelExpr -> Level
+-- evalLevelExpr (LEConst l) = l
+-- evalLevelExpr (LMax l r) = max (evalLevelExpr l) (evalLevelExpr r)
+-- evalLevelExpr (LPlus l s) = levelAdd (evalLevelExpr l) s
+
+-- instance Ord LevelExpr where
+--   l <= r = evalLevelExpr l <= evalLevelExpr r
 
 -- | Because types and terms use the same AST, we define the following
 -- type synonym so that we can hint whether a piece of syntax is being used

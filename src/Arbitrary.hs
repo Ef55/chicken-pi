@@ -144,14 +144,10 @@ genLevel :: Int -> Gen Level
 genLevel n
     | n <= 0 = frequency [
         (2, return (LConst 0)),
-        (1, return (LConst 1)),
-        (1, LVar <$> elements ["l", "m", "n"])
+        (1, return (LConst 1))
       ]
     | otherwise = frequency [
-        (3, LConst <$> arbitrarySizedNatural),
-        (1, LVar <$> elements ["l", "m", "n"]),
-        (2, LMax <$> genLevel n' <*> genLevel n'),
-        (2, LPlus <$> genLevel n' <*> arbitrarySizedNatural)
+        (3, LConst <$> arbitrarySizedNatural)
       ]
       where n' = n `div` 2
 
