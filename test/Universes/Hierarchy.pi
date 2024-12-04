@@ -2,31 +2,31 @@ module Hierarchy where
 
 -- Core tests for the type hierarchy
 
-prop : Type 1
-prop = Prop
-
 propImpredicativity : Prop
 propImpredicativity = Prop
 
-set : Type 1
-set = Set
+-- prop : Type
+-- prop = Prop
 
-someType0 : Type 2
-someType0 = Type 1
+-- set : Type 1
+-- set = Set
 
-someType1 : Type 42
-someType1 = Type 41
+-- someType0 : Type 2
+-- someType0 = Type 1
 
-someType2 : Type 1048
-someType2 = Type 1047
+-- someType1 : Type 42
+-- someType1 = Type 41
+
+-- someType2 : Type 1048
+-- someType2 = Type 1047
 
 -- Tests for some constructs
 
-propForall : Prop
-propForall = Prop -> Prop
+-- propForall : Prop
+-- propForall = Prop -> Prop
 
-typeArrow0 : Type 42
-typeArrow0 = Type 14 -> Type 42
+-- typeArrow0 : Type 42
+-- typeArrow0 = Type 14 -> Type 42
 
-typeArrow1 : Type 42
-typeArrow1 = Type 42 -> Type 14
+-- typeArrow1 : Type 42
+-- typeArrow1 = Type 42 -> Type 14

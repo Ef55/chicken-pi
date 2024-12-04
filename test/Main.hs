@@ -25,6 +25,7 @@ main = do
   let dataExamples = testGroup "Examples: Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Bool", "Nat", "Pos"])
   let dataTests = testGroup "Data" (tcFile ["test/Data"] <$> ["Dependent"])
   let matchingTests = testGroup "Matching" (tcFile ["test/Matching"] <$> ["Subst", "Eval", "Wildcard"])
+  let universesTests = testGroup "Universes" (tcFile ["test/Universes"] <$> [ "Hierarchy" ])
   let failingTests =
         testGroup
           "Failing"
@@ -42,6 +43,7 @@ main = do
         dataExamples,
         dataTests,
         matchingTests,
+        universesTests,
         failingTests
       ]
 
