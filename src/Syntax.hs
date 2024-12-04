@@ -1,19 +1,18 @@
-
 -- | The abstract syntax of the simple dependently typed language
 -- See the comment at the top of 'Parser' for the concrete syntax of this language
 module Syntax where
 
+import Data.Function (on)
+import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Typeable (Typeable)
-import GHC.Generics (Generic,from)
 import GHC.Base (MonadPlus)
+import GHC.Generics (Generic, from)
 import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos, newPos)
 import Unbound.Generics.LocallyNameless qualified as Unbound
 import Unbound.Generics.LocallyNameless.Internal.Fold qualified as Unbound
-
-import Data.Function (on)
 
 -----------------------------------------
 
@@ -23,10 +22,9 @@ import Data.Function (on)
 
 -- | For variable names, we use the `Unbound` library to
 -- automatically generate free variable, substitution,
--- and alpha-equality function. The abstract type `Name` from 
--- this library is indexed by the AST type that this variable 
--- is a name for. 
-
+-- and alpha-equality function. The abstract type `Name` from
+-- this library is indexed by the AST type that this variable
+-- is a name for.
 type TName = Unbound.Name Term
 
 -----------------------------------------
@@ -63,37 +61,35 @@ data Term
   | -- | let expression, introduces a new (non-recursive) definition in the ctx
     -- | `let x = a in b`
     Let Term (Unbound.Bind TName Term)
-  | -- | the type with a single inhabitant, called `Unit`
-    TyUnit
-  | -- | the inhabitant of `Unit`, written `()`
-    LitUnit
-  | -- | the type with two inhabitants (homework) `Bool`
-    TyBool
-  | -- | `True` and `False`
-    LitBool Bool
-  | -- | `if a then b1 else b2` expression for eliminating booleans
-    If Term Term Term
-  | -- | Sigma-type (homework), written `{ x : A | B }`  
+  | -- | Sigma-type (homework), written `{ x : A | B }`
     TySigma Term (Unbound.Bind TName Term)
   | -- | introduction form for Sigma-types `( a , b )`
     Prod Term Term
   | -- | elimination form for Sigma-types `let (x,y) = a in b`
-    LetPair Term (Unbound.Bind (TName, TName) Term) 
+    LetPair Term (Unbound.Bind (TName, TName) Term)
   | -- | Equality type  `a = b`
     TyEq Term Term
   | -- | Proof of equality `Refl`
-    Refl 
+    Refl
   | -- | equality type elimination  `subst a by pf`
-    Subst Term Term 
+    Subst Term Term
   | -- | witness to an equality contradiction
     Contra Term
-    
-
+  | -- | pattern matching
+    Case Term (Maybe Term) [Branch]
   deriving (Show, Generic)
+
+newtype Branch = Branch {getBranch :: Unbound.Bind Pattern Term}
+  deriving (Show, Generic, Typeable)
+  deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
 -- | An argument to a function
 data Arg = Arg {argEp :: Epsilon, unArg :: Term}
   deriving (Show, Generic, Unbound.Alpha, Unbound.Subst Term)
+
+data Pattern
+  = PatCon String [TName]
+  deriving (Show, Eq, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 -- | Epsilon annotates the stage of a variable
 data Epsilon
@@ -111,8 +107,6 @@ data Epsilon
       Unbound.Subst Term
     )
 
-
-
 -----------------------------------------
 
 -- * Modules and declarations
@@ -127,7 +121,7 @@ type ModuleName = String
 data Module = Module
   { moduleName :: ModuleName,
     moduleImports :: [ModuleImport],
-    moduleEntries :: [Entry] 
+    moduleEntries :: [Entry]
   }
   deriving (Show, Generic, Typeable, Unbound.Alpha)
 
@@ -136,13 +130,24 @@ newtype ModuleImport = ModuleImport ModuleName
   deriving (Show, Eq, Generic, Typeable)
   deriving anyclass (Unbound.Alpha)
 
--- | A type declaration 
-data TypeDecl = TypeDecl {declName :: TName , declEp :: Epsilon  , declType :: Type}
+-- | A type declaration
+data TypeDecl = TypeDecl {declName :: TName, declEp :: Epsilon, declType :: Type}
   deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 -- | Declare the type of a term
 mkDecl :: TName -> Type -> Entry
-mkDecl n ty = Decl (TypeDecl n Rel  ty)
+mkDecl n ty = Decl (TypeDecl n Rel ty)
+
+-- | A list of parameters of datatype/constructor
+data Telescope
+  = Empty
+  | Tele (Unbound.Rebind (TName, Unbound.Embed Type) Telescope)
+  deriving (Show, Generic)
+  deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
+
+-- | A constructor is a name equipped with a telescope
+data Constructor = Constructor {cstrName :: TName, cstrType :: Unbound.Bind Telescope Type}
+  deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 -- | Entries are the components of modules
 data Entry
@@ -151,19 +156,18 @@ data Entry
   | -- | The definition of a particular name 'x = a'
     -- must already have a type declaration in scope
     Def TName Term
-    -- | Adjust the context for relevance checking
-  | Demote Epsilon  
-
+  | -- | Adjust the context for relevance checking
+    Demote Epsilon
+  | -- | The definition of a datatype
+    Data TypeDecl [Constructor]
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
-
-
-
 -----------------------------------------
+
 -- * Auxiliary functions on syntax
------------------------------------------
 
+-----------------------------------------
 
 -- | Remove source positions and type annotations from the top level of a term
 strip :: Term -> Term
@@ -180,16 +184,16 @@ unPos _ = Nothing
 unPosFlaky :: Term -> SourcePos
 unPosFlaky t = fromMaybe (newPos "unknown location" 0 0) (unPos t)
 
-
-
 -----------------------------------------
+
 -- * Unbound library
+
 -----------------------------------------
 
 -- We use the unbound-generics library to mark the binding occurrences of
 -- variables in the syntax. That allows us to automatically derive
 -- functions for alpha-equivalence, free variables and substitution
--- using generic programming. 
+-- using generic programming.
 
 -- The definitions below specialize the generic operations from the libary
 -- to some of the common uses that we need in pi-forall
@@ -198,7 +202,7 @@ unPosFlaky t = fromMaybe (newPos "unknown location" 0 0) (unPos t)
 aeq :: Term -> Term -> Bool
 aeq = Unbound.aeq
 
--- | Calculate the free variables of a term 
+-- | Calculate the free variables of a term
 fv :: Term -> [Unbound.Name Term]
 fv = Unbound.toListOf Unbound.fv
 
@@ -207,7 +211,7 @@ fv = Unbound.toListOf Unbound.fv
 subst :: TName -> Term -> Term -> Term
 subst = Unbound.subst
 
--- | in a binder `x.a` replace `x` with `b` 
+-- | in a binder `x.a` replace `x` with `b`
 instantiate :: Unbound.Bind TName Term -> Term -> Term
 instantiate bnd a = Unbound.instantiate bnd [a]
 
@@ -217,27 +221,27 @@ unbind = Unbound.unbind
 
 -- | in binders `x.a1` and `x.a2` replace `x` with a fresh name in both terms
 unbind2 :: (Unbound.Fresh m) => Unbound.Bind TName Term -> Unbound.Bind TName Term -> m (TName, Term, Term)
-unbind2 b1 b2 = do 
+unbind2 b1 b2 = do
   o <- Unbound.unbind2 b1 b2
-  case o of 
-      Just (x,t,_,u) -> return (x,t,u)
-      Nothing -> error "impossible" 
+  case o of
+    Just (x, t, _, u) -> return (x, t, u)
+    Nothing -> error "impossible"
+
 ------------------
 
 -- * `Alpha` class instances
 
 -- The Unbound library's `Alpha` class enables the `aeq`, `fv`,
--- `instantiate` and `unbind` functions, and also allows some 
+-- `instantiate` and `unbind` functions, and also allows some
 -- specialization of their generic behavior.
 
--- For `Term`, we'd like Alpha equivalence to ignore 
--- source positions and type annotations. So we make sure to 
+-- For `Term`, we'd like Alpha equivalence to ignore
+-- source positions and type annotations. So we make sure to
 -- remove them before calling the generic operation.
 
 instance Unbound.Alpha Term where
   aeq' :: Unbound.AlphaCtx -> Term -> Term -> Bool
   aeq' ctx a b = (Unbound.gaeq ctx `on` from) (strip a) (strip b)
-
 
 -- For example, all occurrences of annotations and source positions
 -- are ignored by this definition.
@@ -248,8 +252,7 @@ instance Unbound.Alpha Term where
 -- '(Bool, Bool:Type)' is alpha-equivalent to (Bool, Bool)
 -- >>> aeq (Prod TyBool (Ann TyBool TyType)) (Prod TyBool TyBool)
 
-
--- At the same time, the generic operation equates terms that differ only 
+-- At the same time, the generic operation equates terms that differ only
 -- in the names of bound variables.
 
 -- 'x'
@@ -270,8 +273,6 @@ idy = Lam Rel (Unbound.bind yName (Var yName))
 
 -- >>> aeq idx idy
 
-
-
 ---------------
 
 -- * Substitution
@@ -280,30 +281,19 @@ idy = Lam Rel (Unbound.bind yName (Var yName))
 -- It has two parameters because the type of thing we are substituting
 -- for may not be the same as what we are substituting into.
 
--- The `isvar` function identifies the variables in the term that 
+-- The `isvar` function identifies the variables in the term that
 -- should be substituted for.
 instance Unbound.Subst Term Term where
   isvar (Var x) = Just (Unbound.SubstName x)
   isvar _ = Nothing
-
-
--- '(y : x) -> y'
-pi1 :: Term 
-pi1 = TyPi Rel (Var xName) (Unbound.bind yName (Var yName))
-
--- '(y : Bool) -> y'
-pi2 :: Term 
-pi2 = TyPi Rel TyBool (Unbound.bind yName (Var yName))
-
--- >>> Unbound.aeq (Unbound.subst xName TyBool pi1) pi2
 
 -----------------
 
 -- * Source Positions
 
 -- SourcePositions do not have an instance of the Generic class available
--- so we cannot automatically define their `Alpha` and `Subst` instances. 
--- Instead we provide a trivial implementation here. 
+-- so we cannot automatically define their `Alpha` and `Subst` instances.
+-- Instead we provide a trivial implementation here.
 instance Unbound.Alpha SourcePos where
   aeq' _ _ _ = True
   fvAny' _ _ = pure
@@ -319,11 +309,7 @@ instance Unbound.Alpha SourcePos where
   acompare' _ _ _ = EQ
 
 -- Substitutions ignore source positions
-instance Unbound.Subst b SourcePos where 
-    subst _ _ = id
-    substs _ = id
-    substBvs _ _ = id
-
-
-
-
+instance Unbound.Subst b SourcePos where
+  subst _ _ = id
+  substs _ = id
+  substBvs _ _ = id

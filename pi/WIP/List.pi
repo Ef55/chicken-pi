@@ -1,11 +1,9 @@
 module List where
 
---{ Features: datatypes:inductive, datatypes:parametric }
 data List (T: Type0) : Type0 =
   Nil
   Cons (h: T) (t: List T)
 
---{ Features: matching:parameters, recursive }
 foldLeft : (T: Type0) -> (S: Type1000) -> (S -> T -> S) -> S -> List T -> S
 foldLeft = \  T S f s ts . case ts of
   Nil _ -> s

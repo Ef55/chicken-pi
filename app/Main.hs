@@ -30,7 +30,8 @@ go str = do
     Right term -> do 
       putStrLn "parsed as"
       putStrLn $ render $ disp term
-      res <- runTcMonad emptyEnv (inferType term)
+      let (res, logs) = runTcMonad emptyEnv (inferType term)
+      mapM_ putStr logs
       case res of 
         Left typeError -> putTypeError typeError
         Right ty -> do
@@ -59,9 +60,12 @@ goFilename pathToMainFile = do
   v <- runExceptT (getModules prefixes name)
   val <- v `exitWith` putParseError
   putStrLn "type checking..."
-  d <- runTcMonad emptyEnv (tcModules val)
-  defs <- d `exitWith` putTypeError
-  putStrLn $ render $ disp (last defs)
+  let (d, logs) = runTcMonad emptyEnv (tcModules val)
+  mapM_ putStrLn logs
+  case d of
+    Left err -> putTypeError err
+    Right defs -> do
+      putStrLn $ render $ disp (last defs)
 
 
 -- | 'pi <filename>' invokes the type checker on the given 

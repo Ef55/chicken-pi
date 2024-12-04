@@ -1,0 +1,7 @@
+module WildcardVar where
+
+data Unit : Type :=
+  unit : Unit
+
+id : Unit -> Unit
+id = \_ . _

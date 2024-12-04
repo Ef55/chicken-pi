@@ -1,11 +1,9 @@
 module Bool where
 
---{ Features: datatypes }
-data Bool : Type =
-  True
-  False
+data Bool : Type :=
+  True : Bool
+  False : Bool
 
---{ Features: matching }
 and : Bool -> Bool -> Bool
 and = \l r . case l of
   True -> r

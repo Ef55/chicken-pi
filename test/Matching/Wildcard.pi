@@ -1,0 +1,20 @@
+module Wildcard where
+
+data Data : Type :=
+  One : Data
+  Two : Data
+  Three : Data
+
+data Data' : Type :=
+  A (Data) (Data) (Data): Data'
+  B (Data) (Data') (Data): Data'
+  C (Data'): Data'
+
+test0 : Data' -> Data
+test0 = \d . case d of
+  A _ v0 _ -> v0 
+  B _ _ v1 -> v1
+  C v2 -> test0 v2
+
+test1 : Data -> Data'
+test1 = \_ . A One Two Three

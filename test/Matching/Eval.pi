@@ -1,0 +1,15 @@
+module Eval where
+
+data Data: Type :=
+  One : Data
+  Two : Data
+  Three : Data
+
+f : Data -> Data
+f = \d . case d of
+  One -> Two
+  Two -> Three
+  Three -> One
+
+eval1 : (f One) = (Two)
+eval1 = Refl

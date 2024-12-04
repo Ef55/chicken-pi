@@ -1,0 +1,11 @@
+module InvalidPattern where
+
+data Unit : Type :=
+  unit: Unit
+
+data Data : Type :=
+  One (Unit) (Unit) (Unit): Data
+
+test : Data -> Unit
+test = \d . case d of
+  One u0 u1 -> unit

@@ -1,0 +1,11 @@
+module NonExhaustive where
+
+data Data: Type :=
+  One : Data
+  Two : Data
+  Three : Data
+
+f : Data -> Data
+f = \d . case d of
+  One -> Two
+  Three -> One

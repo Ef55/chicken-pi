@@ -1,12 +1,10 @@
 module Pos where
 
---{ Features: datatypes:inductive, datatypes:explicit-type }
-data Pos =
-  O
-  S (p: Pos) : Pos
+data Pos : Type :=
+  O : Pos
+  S (Pos): Pos
 
---{ Features: datatypes:inductive, datatypes:explicit-type }
-data BinPos =
-  MSB
-  xI (_: BinPos): BinPos
-  xO (_: BinPos): BinPos
+data BinPos : Type :=
+  MSB : BinPos
+  xI (BinPos): BinPos
+  xO (BinPos): BinPos

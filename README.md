@@ -12,9 +12,11 @@ Note that these should not necessarily be done in order.
    - [ ] Remove (syntax) for irrelevant arguments.
    - [ ] Prevent recursive functions.
 2. "Dirt simple" (no parameters/indices) datatypes (see [oplss notes](https://github.com/sweirich/pi-forall/blob/2023/doc/oplss.pdf) chapter 9):
-   - [ ] Definition.
-   - [ ] Pattern matching (without `as`, `in` and `return`).
-   - [ ] Exhaustivity check for pattern matching.
+   - [X] Definition.
+   - [X] Pattern matching (without `as`, `in` ~and `return`~).
+   - [X] Exhaustivity check for pattern matching.
+   - [ ] Relax ordering in patterns.
+   - [X] Wildcard in patterns.
 3. Universes:
    - [ ] Sorts: `Prop`, `Set`, and `Type i`.
    - [ ] Universe subtyping/cumulativity (see [subtyping rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#subtyping-rules)).
@@ -27,7 +29,9 @@ Note that these should not necessarily be done in order.
    - [ ] "[Guardness](https://link.springer.com/chapter/10.1007/3-540-60579-7_3)" check.
    - [ ] [Dependent pattern matching](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html#the-match-with-end-construction) (i.e. `as` and `return`).
    - [ ] Type parameters.
-   - [ ] Type indices + pattern matching extension (`in`).
+   - [ ] Type indices + pattern matching extension (`in`)
+   - [ ] `if-then-else` as an alias for pattern matching
+   - [ ] Support `data` equalities in `Contra`.
 
 ## Known differences with Coq
 
