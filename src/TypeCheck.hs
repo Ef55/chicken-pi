@@ -20,15 +20,18 @@ import Unbound.Generics.LocallyNameless qualified as Unbound
 ---------------------------------------------------------------------
 -- Helper function for implementing impredicativity
 imax :: Level -> Level -> Level
-imax l1 (LConst 0) = LConst 0
-imax l1 l2 = LMax l1 l2
+imax _ LProp = LProp
+imax LProp _ = LProp
+imax _ LSet = LSet
+imax LSet _ = LSet
+imax (LConst i) (LConst j) = LConst (max i j)
 
 -- | Subtyping relation to handle universe cumulativity
 subtype :: Type -> Type -> TcMonad ()
-subtype (TyType l1) (TyType l2) = do
-  if l1 <= l2
-    then return ()
-    else do
+subtype (TyType l1) (TyType l2)
+  | l1 == LProp || l1 == LSet = return () -- LProp and LSet are subtypes of any Type
+  | l1 <= l2 = return () -- Universe cumulativity: l1 <= l2
+  | otherwise = do
       gamma <- Env.getLocalCtx
       Env.err
         [ DS "Universe level mismatch: cannot use 'Type",
@@ -39,7 +42,6 @@ subtype (TyType l1) (TyType l2) = do
           DS "In context:",
           DD gamma
         ]
-subtype Prop (TyType _) = return ()
 subtype ty1 ty2 = Equal.equate ty1 ty2
 
 -- | Infer/synthesize the type of a term
@@ -51,9 +53,8 @@ inferType a = case a of
     Env.checkStage (declEp decl)
     return (declType decl)
 
-  -- i-type
-  TyType l -> return (TyType (LPlus l 1)) -- Type l : Type (l + 1)
-
+  -- i-type -- Type l : Type (l + 1)
+  TyType l -> return (TyType (levelAdd l 1))
   -- i-pi
   (TyPi ep tyA bnd) -> do
     (x, tyB) <- unbind bnd
@@ -107,7 +108,7 @@ inferType a = case a of
   (TyEq a b) -> do
     aTy <- inferType a
     checkType b aTy
-    return Prop -- Equality types are in Prop (Type 0)
+    return (TyType LProp) -- Equality types are in Prop (Type 0)
   (Case scrut (Just ret) branches) -> do
     checkMatch scrut ret branches
     return ret
@@ -289,7 +290,6 @@ checkType tm ty = do
           l1 <- tcType tyA
           let tyB = instantiate bnd' (Var x)
           l2 <- Env.extendCtx (mkDecl x tyA) $ tcType tyB
-          let l = imax l1 l2
           decl <- Equal.unify [] p (Prod (Var x) (Var y))
           Env.extendCtxs ([mkDecl x tyA, mkDecl y tyB] ++ decl) $
             checkType body ty'
