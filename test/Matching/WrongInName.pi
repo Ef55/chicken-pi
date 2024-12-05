@@ -1,0 +1,15 @@
+module WrongInName where
+
+data P: Type :=
+  One: P
+  Two (P) (P): P
+
+data D0 : Type :=
+  C0 (P) (P): D0
+
+data D1 : Type :=
+  C1 (P) (P): D1
+
+f : D0 -> P
+f = \d0 . case d0 in D1 of
+  C0 _ p -> p

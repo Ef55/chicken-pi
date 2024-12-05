@@ -34,7 +34,16 @@ tests =
               [ ("Constructors must be for the type being defined", "DefinesOtherType", "C1.*has type D0.*should be constructor for D1"),
                 ("Constructors must fully apply the type being defined", "NotFullyApplied", "should have type.*fully applied?")
               ]
-      matchingTests = testGroup "Matching" (positiveTests "test/Matching" ["Subst", "Eval", "Wildcard"])
+
+      matchingTests =
+        testGroup
+          "Matching"
+          $ positiveTests "test/Matching" ["Subst", "Eval", "Wildcard"]
+            ++ negativeTests
+              "test/Matching"
+              [ ("Type mentioned in return clause must match", "WrongInName", "???")
+              ]
+
       positivityTests =
         testGroup
           "Positivity"
@@ -44,6 +53,7 @@ tests =
               ("Type being defined cannot be used non-uniformly", "SelfNonUniform", "T is currently being defined.*as an argument.*NU T"),
               ("Constructors are parametric on parameters", "ParamNotIndex", "first 2 argument.*should be P Q.*found t0 t1")
             ]
+
       failingTests =
         testGroup
           "Failing"
