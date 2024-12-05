@@ -165,6 +165,7 @@ piforallStyle =
           "by",
           "let",
           "in",
+          "as",
           "axiom",
           "TRUSTME",
           "PRINTME",
@@ -275,10 +276,13 @@ telescope = do
   return tele
 
 binding :: LParser (TName, Type)
-binding = parens (do
-  name <- option wildcardName (try $ varOrWildcard >>= \n -> colon >> return n)
-  typ <- expr
-  return (name, typ))
+binding =
+  parens
+    ( do
+        name <- option wildcardName (try $ varOrWildcard >>= \n -> colon >> return n)
+        typ <- expr
+        return (name, typ)
+    )
 
 ------------------------
 ------------------------
@@ -428,14 +432,13 @@ patternMatching :: LParser Term
 patternMatching = do
   reserved "case"
   scrutinee <- term
-  inClause <- option Nothing $ try (do
-            reserved "in"
-            (constructor, bindings) <- simplePattern
-            return $ Just $ PatCon constructor bindings)
-  ret <- Just <$> try (reserved "return" >> term) <|> pure Nothing
+  asClause <- option Nothing $ try (Just <$> (reserved "as" >> variable))
+  inClause <- option Nothing $ try (Just . uncurry PatCon <$> (reserved "in" >> simplePattern))
+  retClause <- option Nothing $ try (Just <$> (reserved "return" >> term))
   reserved "of"
   branches <- layout branch (return ())
-  return $ Case scrutinee (Unbound.bind inClause (ret, branches))
+  let predicate = DestructionPredicate $ Unbound.bind (asClause, inClause) retClause
+  return $ Case scrutinee predicate branches
   where
     simplePattern = do
       constructor <- identifier

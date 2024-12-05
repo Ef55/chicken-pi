@@ -5,6 +5,7 @@
 -- | The main routines for type-checking
 module TypeCheck (tcModules, inferType, checkType) where
 
+import Control.Exception (assert)
 import Control.Monad.Except
 import Data.Maybe (catMaybes, fromMaybe)
 import Debug.Trace
@@ -81,113 +82,133 @@ inferType a = case a of
     aTy <- inferType a
     checkType b aTy
     return TyType
-  (Case scrut branches) -> do
-    (inPattern, (ret, branches)) <- Unbound.unbind branches
-    case ret of
-      Just ret -> checkMatch scrut ret Nothing inPattern branches >> return ret
-      Nothing ->
-        Env.err
-          [ DS "In",
-            DD a,
-            DS "cannot infer typ of pattern matching without `return` clause"
-          ]
-  -- cannot synthesize the type of the term
+  (Case scrut pred branches) -> checkCase scrut pred branches Nothing
   _ ->
     Env.err [DS "Must have a type annotation for", DD a]
 
 -------------------------------------------------------------------------
 
--- | Typecheck a pattern-matching construct
-checkMatch :: Term -> Type -> Maybe Type -> Maybe Pattern -> [Branch] -> TcMonad ()
-checkMatch scrut ret retComp inPattern branches = do
-  tyS <- inferType scrut
-  ret <- Equal.whnf ret
-  (typeName, typeArgs, pack) <- checkTypeConstructor tyS
-  (paramsBinders, constructors) <- Unbound.unbind pack
-  (constructors, indices) <- substTele typeArgs paramsBinders constructors
-  let params = take (length typeArgs - length indices) typeArgs
-  when (length branches /= length constructors) $
+checkCase :: Term -> DestructionPredicate -> [Branch] -> Maybe Type -> TcMonad Type
+checkCase scrut pred branches mRet = do
+  (typeDecl, typeParams, pred, ret) <- checkScrutinee scrut pred mRet
+  checkMatch pred typeDecl typeParams branches
+  return ret
+
+instantiateDestructionPredicate :: Term -> [Type] -> Unbound.Bind (TName, Pattern) Type -> TcMonad Type
+instantiateDestructionPredicate scrut typeArgs pred = do
+  ((sVar, PatCon _ typeArgVars), res) <- Unbound.unbind pred
+  when (length typeArgVars /= length typeArgs) $
+    Env.err
+      [ DS "Internal error: instantiateDestructionPredicate.",
+        DS "Vars:",
+        DL $ DD <$> typeArgVars,
+        DS "Args:",
+        DL $ DD <$> typeArgs
+      ]
+  return $ Unbound.substs ((sVar, scrut) : zip typeArgVars typeArgs) res
+
+checkScrutinee ::
+  Term ->
+  DestructionPredicate ->
+  Maybe Type ->
+  TcMonad (TypeConstructor, [Type], Unbound.Bind (TName, Pattern) Type, Type)
+checkScrutinee s p@(DestructionPredicate bPred) mExp = do
+  -- Dummy term used for error reporting
+  let dummy = Case s p []
+
+  -- Check scrutinee and extract information about its type
+  sType <- inferType s
+  (typeCstrName, typeArgs) <- Equal.unconstruct sType
+  tcLookup <- Env.lookupTypeConstructor typeCstrName
+  typeDecl <- case tcLookup of
+    Just tcDecl -> return tcDecl
+    Nothing ->
+      Env.err
+        [ DS "The scrutinee in",
+          DD dummy,
+          DS "has type",
+          DD sType,
+          DS "which is not a datatype."
+        ]
+  (typeParams, _) <- splitParamsIndices typeDecl typeArgs
+
+  -- Generate a full destruction predicate
+  ((asBind, inBind), mRet) <- Unbound.unbind bPred
+  asBind' <- maybe Env.freshWildcard return asBind
+  inBind' <- maybe (generatePattern typeCstrName typeArgs) return inBind
+  paraRet <- case (mRet, mExp) of
+    (Just ret, _) -> return ret
+    (_, Just ret) -> return ret
+    (Nothing, Nothing) ->
+      Env.err
+        [ DS "Cannot infer return type of case expression",
+          DD dummy
+        ]
+  let pred = Unbound.bind (asBind', inBind') paraRet
+
+  -- Check expected type against destruction predicate
+  ret <- instantiateDestructionPredicate s typeArgs pred
+  case mExp of
+    Nothing -> return ()
+    Just exp -> Equal.equate exp ret
+
+  return (typeDecl, typeParams, pred, ret)
+  where
+    generatePattern :: TName -> [Type] -> TcMonad Pattern
+    generatePattern typeCstrName typeArgs = PatCon (Unbound.name2String typeCstrName) <$> mapM (const Env.freshWildcard) typeArgs
+
+    splitParamsIndices :: TypeConstructor -> [Type] -> TcMonad ([Type], [Type])
+    splitParamsIndices (TypeConstructor _ _ cstrs) args = do
+      (telescope, _) <- Unbound.unbind cstrs
+      let params :: [TName] = Unbound.toListOf Unbound.fv telescope
+          paramCount = length params
+      return $ splitAt paramCount args
+
+checkMatch :: Unbound.Bind (TName, Pattern) Type -> TypeConstructor -> [Type] -> [Branch] -> TcMonad ()
+checkMatch ret (TypeConstructor typeName _ constructors) typeParams branches = do
+  (typeTelescope, constructors') <- Unbound.unbind constructors
+  let typeParamsVars :: [TName] = Unbound.toListOf Unbound.fv typeTelescope
+      constructors'' = Unbound.substs (zip typeParamsVars typeParams) constructors'
+
+  when (length branches /= length constructors'') $
     Env.err
       [ DS $ "Pattern matching has " ++ show (length branches) ++ " branches, yet the matched type",
         DD typeName,
-        DS $ "has " ++ show (length constructors) ++ " constructors."
+        DS $ "has " ++ show (length constructors'') ++ " constructors."
       ]
-  case (retComp, inPattern) of
-    (Nothing, _) -> return ()
-    (Just retComp, Nothing) -> Equal.equate ret retComp
-    (Just retComp, Just (PatCon _ inVars)) -> do
-      Env.extendCtxs (zipWith Def inVars typeArgs) $ Equal.equate ret retComp
-  mapM_
-    ( \(Constructor expCstr typCstr, branch) -> do
-        (PatCon cstr xs, body) <- Unbound.unbind (getBranch branch)
-        when (expCstr /= string2Name cstr) $
-          Env.err
-            [ DS "Pattern is headed by",
-              DD cstr,
-              DS "but constructor",
-              DD expCstr,
-              DS "was expected."
-            ]
-        (tele, _) <- Unbound.unbind typCstr
+  mapM_ (uncurry (checkBranch ret typeParams)) (zip constructors'' branches)
 
-        let cstrArgs = params ++ (Var <$> xs)
-            decl = case scrut of
-              Var s -> [Def s (foldl App (Var expCstr) (Arg Rel <$> cstrArgs))]
-              _ -> []
-        cstrIndicies <- Equal.instantiateConstructorType expCstr cstrArgs
-        typeArgDecls <- case inPattern of
-          Nothing -> return []
-          Just (PatCon _ inPattern) ->
-            return $ zipWith Def inPattern cstrIndicies
-        enterBranch xs tele $ \_ ->
-          Env.extendCtxs (decl ++ typeArgDecls) $
-            checkType body ret
-    )
-    (zip constructors branches)
-  where
-    checkTypeConstructor :: Type -> TcMonad (TName, [Term], Unbound.Bind Telescope [Constructor])
-    checkTypeConstructor tyS =
-      Equal.unconstruct tyS
-        >>= \(m, params) -> do
-          m' <- Env.lookupTypeConstructor m
-          case m' of
-            Nothing -> Env.err [DD m, DS "is not a type constructor"]
-            Just (TypeConstructor name _ cstrs) -> return (name, params, cstrs)
+checkBranch :: Unbound.Bind (TName, Pattern) Type -> [Type] -> Constructor -> Branch -> TcMonad ()
+checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch branch) = do
+  (pat@(PatCon cstrStr xs), body) <- Unbound.unbind branch
+  when (cstrName /= string2Name cstrStr) $
+    Env.err
+      [ DS "Pattern is headed by",
+        DD cstrStr,
+        DS "but constructor",
+        DD cstrName,
+        DS "was expected."
+      ]
 
-    substTele :: [Term] -> Telescope -> [Constructor] -> TcMonad ([Constructor], [Term])
-    substTele as Empty r = return (r, as)
-    substTele (a : as) (Tele t) r = do
-      let ((x, _), t') = Unbound.unrebind t
-          t'' = Unbound.subst x a t'
-          r' = Unbound.subst x a r
-      substTele as t'' r'
-    substTele _ _ _ = error "Internal error: substTele failed"
+  let cstrArgs = typeParams ++ (Var <$> xs)
+      scrut = foldl App (Var cstrName) (Arg Rel <$> cstrArgs)
+  typeArgs <- Equal.instantiateConstructorType cstrName cstrArgs
+  ret <- instantiateDestructionPredicate scrut typeArgs retPred
+  
+  -- Retrieve the type of the bindings in the telescope
+  (telescope, _) <- instantiateTelescope cstrType (Var <$> xs)
+  let entries = zipWith (\x t -> Decl $ TypeDecl x Rel t) xs telescope
 
-    enterBranch :: [TName] -> Telescope -> ([TName] -> TcMonad a) -> TcMonad a
-    enterBranch = iter []
-      where
-        iter :: [TName] -> [TName] -> Telescope -> ([TName] -> TcMonad a) -> TcMonad a
-        iter vars names tele k = do
-          case (names, tele) of
-            (n : ns, Tele t) -> do
-              let ((x, Unbound.Embed xType), t') = Unbound.unrebind t
-                  t'' = Unbound.subst x (Var n) t'
-              Env.extendCtx (Decl $ TypeDecl n Rel xType) $ iter (x : vars) ns t'' k
-            -- The following errors currently cannot occur due to the instantiation
-            -- of the constructor prior to trying to enter the branch.
-            ([], t@(Tele _)) ->
-              Env.err
-                [ DS "Too few variables in pattern: parameters",
-                  DD t,
-                  DS "are not bound."
-                ]
-            (n : _, _) ->
-              Env.err
-                [ DS "Too many variables in pattern:",
-                  DD n,
-                  DS "is the first unused name."
-                ]
-            (_, _) -> k vars
+  let 
+  when (length telescope /= length xs) $
+    Env.err
+      [ DS "Pattern",
+        DD pat,
+        DS "does not bind the correct number of variables for constructor",
+        DD cstr
+      ]
+  Env.extendCtxs entries $ checkType body ret
+
 
 -------------------------------------------------------------------------
 
@@ -247,7 +268,7 @@ checkType tm ty = do
     -- Practicalities
     (Pos p a) ->
       Env.extendSourceLocation p a $ checkType a ty'
-    TrustMe -> Env.warn [ DS "Unmet obligation." ]
+    TrustMe -> Env.warn [DS "Unmet obligation."]
     PrintMe -> do
       gamma <- Env.getLocalCtx
       Env.warn
@@ -327,10 +348,7 @@ checkType tm ty = do
               DD b,
               DS "are contradictory"
             ]
-    (Case scrut branches) -> do
-      (inPattern, (ret, branches)) <- Unbound.unbind branches
-      let tyR = fromMaybe ty' ret
-      checkMatch scrut tyR (Just ty') inPattern branches
+    (Case scrut pred branches) -> void $ checkCase scrut pred branches (Just ty')
     -- c-infer
     _ -> do
       tyA <- inferType tm
@@ -436,6 +454,7 @@ tcEntry dat@(Data (TypeConstructor typ arity pack)) = do
   sort <- isArityOfSort arity
   (params, constructors) <- Unbound.unbind pack
   let td = TypeDecl typ Rel (teleToPi params arity)
+  tcType (declType td)
   duplicateTypeBindingCheck td
   cstrs <- Env.extendCtx (Decl td) $ underTelescope params $ \p -> tcConstructors (typ, sort) p constructors
   return $ AddCtx (dat : Decl td : cstrs)

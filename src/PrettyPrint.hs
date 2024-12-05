@@ -142,6 +142,8 @@ instance Disp Constructor
 
 instance Disp Telescope
 
+instance Disp Pattern
+
 ------------------------------------------------------------------------
 
 -- * Display Instances for Modules
@@ -469,20 +471,12 @@ instance Display Term where
     p <- ask prec
     dty <- display ty
     return $ parens (levelPi < p) $ PP.text "contra" <+> dty
-  display (Case scrut cases) = Unbound.lunbind cases $ \(inClause, (ret, cases)) -> do
+  display (Case scrut dPredicate cases) = do
     p <- asks prec
     ds <- withPrec 0 $ display scrut
-    di <- case inClause of
-      Nothing -> return PP.empty
-      (Just (PatCon inType args)) -> do
-        dt <- display inType
-        da <- mapM display args
-        return $ PP.text "in" <+> dt <+> PP.vcat da
-    dr <- case ret of
-            Just ret -> withPrec 0 $ display ret
-            Nothing -> const PP.empty
+    dp <- display dPredicate
     db <- withPrec 0 $ mapM (display . getBranch) cases
-    let top = PP.text "case" <+> ds <+> di <+> PP.text "return" <+> dr <+> PP.text "of"
+    let top = PP.text "case" <+> ds <+> dp <+> PP.text "of"
     return $
       parens (levelCase < p) $
         if null cases then top <+> PP.text "{ }" else top $$ PP.nest 2 (PP.vcat db)
@@ -493,17 +487,28 @@ instance Display Arg where
       Irr -> PP.brackets <$> withPrec 0 (display (unArg arg))
       Rel -> display (unArg arg)
 
-instance Display (Unbound.Bind Pattern Term) where
-  display pat = Unbound.lunbind pat $ \(PatCon cstrName bindings, branch) ->
-    do
+instance Display DestructionPredicate where
+  display (DestructionPredicate bnd) = Unbound.lunbind bnd $ \((mAs, mIn), mRet) -> do
+    dAs <- maybeDisplay mAs $ \r -> const (PP.text "as ") <> display r
+    dPat <- maybeDisplay mIn $ \r -> const (PP.text "in ") <> display r
+    dRet <- maybeDisplay mRet $ \r -> const (PP.text "return ") <> display r
+    return $ dAs <+> dPat <+> dRet
+
+instance Display Pattern where
+  display (PatCon cstrName bindings) = do
       cstr <- display cstrName
-      args <- (mapM display bindings)
+      args <- mapM display bindings
+      return $ cstr <+> PP.fsep args
+
+instance Display (Unbound.Bind Pattern Term) where
+  display caze = Unbound.lunbind caze $ \(pat, branch) ->
+    do
+      dp <- display pat
       body <- display branch
       return $
         PP.hang
           ( PP.fsep
-              [ cstr,
-                PP.fsep args,
+              [ dp,
                 PP.text "->"
               ]
           )
@@ -540,6 +545,10 @@ bindParens Irr d = PP.brackets d
 mandatoryBindParens :: Epsilon -> Doc -> Doc
 mandatoryBindParens Rel d = PP.parens d
 mandatoryBindParens Irr d = PP.brackets d
+
+maybeDisplay :: Maybe a -> (a -> DispInfo -> Doc) -> DispInfo -> Doc
+maybeDisplay Nothing _ = return PP.empty
+maybeDisplay (Just a) p = p a
 
 -------------------------------------------------------------------------
 

@@ -6,7 +6,7 @@ module Equal
     equate,
     unify,
     unconstruct,
-    instantiateConstructorType
+    instantiateConstructorType,
   )
 where
 
@@ -20,7 +20,7 @@ import Control.Monad.Except
   )
 import Control.Monad.RWS (MonadReader)
 import Data.Maybe qualified as Maybe
-import Environment (D (DD, DS, DL), Env, Err, TcMonad)
+import Environment (D (DD, DL, DS), Env, Err, TcMonad)
 import Environment qualified as Env
 import GHC.Base (Alternative ((<|>)))
 import Syntax
@@ -77,23 +77,19 @@ equate t1 t2 = do
       equate pf1 pf2
     (Contra a1, Contra a2) ->
       equate a1 a2
-    -- For case _ of, we ignore the annotations (i.e. the matched type & return)
-    (Case s1 b1s, Case s2 b2s) -> do
+    -- For case _ of, we ignore the destruction predicate
+    (Case s1 _ b1s, Case s2 _ b2s) -> do
       equate s1 s2
-      m <- Unbound.unbind2 b1s b2s
-      case m of
-        Nothing -> tyErr n1 n2
-        Just (_, (_, b1s), _, (_, b2s)) -> do
-          when (length b1s /= length b2s) (tyErr n1 n2)
-          mapM_
-            ( \(bn1, bn2) -> do
-                m <- Unbound.unbind2 (getBranch bn1) (getBranch bn2)
-                case m of
-                  Nothing -> do
-                    tyErr n1 n2
-                  Just (_, b1, _, b2) -> equate b1 b2
-            )
-            (zip b1s b2s)
+      when (length b1s /= length b2s) (tyErr n1 n2)
+      mapM_
+        ( \(bn1, bn2) -> do
+            m <- Unbound.unbind2 (getBranch bn1) (getBranch bn2)
+            case m of
+              Nothing -> do
+                tyErr n1 n2
+              Just (_, b1, _, b2) -> equate b1 b2
+        )
+        (zip b1s b2s)
     (_, _) -> tyErr n1 n2
   where
     tyErr n1 n2 = do
@@ -161,14 +157,12 @@ whnf (LetPair a bnd) = do
     Prod b1 c -> do
       whnf (Unbound.instantiate bnd [b1, c])
     _ -> return (LetPair nf bnd)
-whnf c@(Case s bBranches) = do
+whnf c@(Case s pred branches) = do
   ns <- whnf s
-  (bnds, (_, branches)) <- Unbound.unbind bBranches
-  let inVars = maybe [] (\(PatCon _ v) -> v) bnds
-  sb <- pickBranch ns inVars branches
+  sb <- pickBranch ns branches
   case sb of
     Just (b, s) -> whnf $ Unbound.substs s b
-    Nothing -> return $ Case ns bBranches
+    Nothing -> return $ Case ns pred branches
 
 -- ignore/remove type annotations and source positions when normalizing
 whnf (Ann tm _) = whnf tm
@@ -190,10 +184,9 @@ whnf tm = return tm
 -- the (set of) bindings defined in the pattern.
 pickBranch ::
   Term ->
-  [TName] ->
   [Branch] ->
   TcMonad (Maybe (Term, [(TName, Term)]))
-pickBranch s inBindings branches = do
+pickBranch s branches = do
   c <- unconstruct s
   r <- mapM (tryBranch c) branches
   return $ foldl (<|>) Nothing r
@@ -202,17 +195,11 @@ pickBranch s inBindings branches = do
     tryBranch (constructor, args) bnd = do
       (PatCon cstrStr patVars, b) <- Unbound.unbind (getBranch bnd)
       let cstr :: TName = Unbound.string2Name cstrStr
-      typeArgs <- maybeInstantiateConstructorType cstr args
       if constructor == cstr
         then do
-          return
-            ( ( \typeArgs ->
-                  let substPat = zip patVars (drop (length args - length patVars) args)
-                      substIn = zip inBindings typeArgs
-                   in (b, substPat ++ substIn)
-              )
-                <$> typeArgs
-            )
+          typeArgs <- instantiateConstructorType cstr args
+          let substPat = zip patVars (drop (length args - length patVars) args)
+          return $ Just (b, substPat)
         else return Nothing
 
 -- | 'Unify' the two terms, producing a list of definitions that

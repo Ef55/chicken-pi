@@ -76,8 +76,12 @@ data Term
   | -- | witness to an equality contradiction
     Contra Term
   | -- | pattern matching
-    Case Term (Unbound.Bind (Maybe Pattern) (Maybe Term, [Branch]))
+    Case Term DestructionPredicate [Branch]
   deriving (Show, Generic)
+
+newtype DestructionPredicate = DestructionPredicate { getPredicate :: Unbound.Bind (Maybe TName, Maybe Pattern) (Maybe Type) }
+  deriving (Show, Generic, Typeable)
+  deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
 newtype Branch = Branch {getBranch :: Unbound.Bind Pattern Term}
   deriving (Show, Generic, Typeable)
@@ -229,6 +233,23 @@ unbind2 b1 b2 = do
   case o of
     Just (x, t, _, u) -> return (x, t, u)
     Nothing -> error "impossible"
+
+instantiateTelescope :: (Unbound.Fresh m, Unbound.Alpha a, Unbound.Subst Term a) => Unbound.Bind Telescope a -> [Term] -> m ([Type], a)
+instantiateTelescope bnd args = do
+  (telescope, a) <- Unbound.unbind bnd
+  let varTypes = teleToTypes telescope
+      teleVars :: [TName] = Unbound.toListOf Unbound.fv telescope
+      smap = zip teleVars args
+      varTypes' = Unbound.substs smap varTypes
+      a' = Unbound.substs smap a
+  return (varTypes', a')
+
+  where
+    teleToTypes :: Telescope -> [Type]
+    teleToTypes Empty = []
+    teleToTypes (Tele bnd) =
+      let ((_, Unbound.Embed t), t') = Unbound.unrebind bnd
+      in t : teleToTypes t'
 
 ------------------
 

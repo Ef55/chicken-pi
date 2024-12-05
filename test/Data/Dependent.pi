@@ -7,4 +7,4 @@ Y : Data -> Type
 Y = \d . case d of C _ _ y _ -> y
 
 fa : (d: Data) -> Y d
-fa = \d . case d of C _ x _ f -> f x
+fa = \d . case d as d_ return Y d_ of C _ x T f -> f x
