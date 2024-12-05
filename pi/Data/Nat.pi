@@ -1,7 +1,7 @@
 module Nat where
 import Bool
 
-data Nat : Type :=
+data Nat : Type 1 :=
   Z: Nat
   S (Nat): Nat
 

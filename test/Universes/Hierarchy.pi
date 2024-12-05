@@ -2,31 +2,42 @@ module Hierarchy where
 
 -- Core tests for the type hierarchy
 
-propImpredicativity : Prop
-propImpredicativity = Prop
+prop : Type 1
+prop = Prop
 
--- prop : Type
--- prop = Prop
+set : Type 1
+set = Set
 
--- set : Type 1
--- set = Set
+someType0 : Type 2
+someType0 = Type 1
 
--- someType0 : Type 2
--- someType0 = Type 1
+someType1 : Type 42
+someType1 = Type 41
 
--- someType1 : Type 42
--- someType1 = Type 41
-
--- someType2 : Type 1048
--- someType2 = Type 1047
+someType2 : Type 1048
+someType2 = Type 1047
 
 -- Tests for some constructs
 
--- propForall : Prop
--- propForall = Prop -> Prop
+propForall : Type 1
+propForall = [Prop] -> Prop
 
--- typeArrow0 : Type 42
--- typeArrow0 = Type 14 -> Type 42
+typeArrow0 : Type 43
+typeArrow0 = [Type 14] -> Type 42
 
--- typeArrow1 : Type 42
--- typeArrow1 = Type 42 -> Type 14
+typeArrow1 : Type 43
+typeArrow1 = [Type 42] -> Type 14
+
+-- Testing impredicative prop
+
+someType3 : Type 2
+someType3 = Type 1
+
+eqEx : Prop
+eqEx = someType0 = someType3
+
+impredPi : Prop
+impredPi = [Type 42] -> eqEx
+
+impredSigma : Prop 
+impredSigma = { x : someType0 | eqEx }

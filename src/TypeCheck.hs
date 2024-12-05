@@ -18,13 +18,6 @@ import Unbound.Generics.LocallyNameless (string2Name)
 import Unbound.Generics.LocallyNameless qualified as Unbound
 
 ---------------------------------------------------------------------
--- Helper function for implementing impredicativity
-imax :: Level -> Level -> Level
-imax _ LProp = LProp
-imax LProp _ = LProp
-imax _ LSet = LSet
-imax LSet _ = LSet
-imax (LConst i) (LConst j) = LConst (max i j)
 
 -- | Subtyping relation to handle universe cumulativity
 subtype :: Type -> Type -> TcMonad ()
@@ -56,13 +49,21 @@ inferType a = case a of
   -- i-type -- Type l : Type (l + 1)
   TyType l -> return (TyType (levelAdd l 1))
   -- i-pi
+
   (TyPi ep tyA bnd) -> do
     (x, tyB) <- unbind bnd
-    l1 <- tcType tyA
+    l1 <- tcType tyA -- Ensure tyA is a valid type and get its level
     Env.extendCtx (Decl (TypeDecl x ep tyA)) $ do
-      l2 <- tcType tyB
-      let l = imax l1 l2
-      return (TyType l) -- Pi types are in the universe level 'l'
+      tyB' <- Equal.whnf tyB
+      l2 <- tcType tyB'
+      let l = case (l1, l2) of
+           (_, LProp) -> LProp
+           (_, LSet) -> LSet
+           (LConst i, LConst j) -> LConst (max i j)
+           (LProp, l) -> l
+           (LSet, l) -> l
+      return (TyType l) -- Pi types are in universe level 'l'
+
 
   -- i-app
   (App a b) -> do
@@ -70,7 +71,7 @@ inferType a = case a of
     ty1' <- Equal.whnf ty1
     case ty1' of
       (TyPi ep1 tyA bnd) -> do
-        unless (ep1 == argEp b) $
+        unless (ep1 <= argEp b) $
           Env.err
             [ DS "In application, expected",
               DD ep1,
@@ -101,7 +102,12 @@ inferType a = case a of
     l1 <- tcType tyA
     Env.extendCtx (mkDecl x tyA) $ do
       l2 <- tcType tyB
-      let l = imax l1 l2
+      let l = case (l1, l2) of 
+           (_, LProp) -> LProp
+           (_, LSet) -> LSet
+           (LConst i, LConst j) -> LConst (max i j)
+           (LProp, l) -> l
+           (LSet, l) -> l
       return (TyType l) -- Sigma types are in universe level 'l'
 
   -- i-eq
@@ -198,9 +204,10 @@ tcType tm = Env.withStage Irr $ do
   ty <- inferType tm
   ty' <- Equal.whnf ty
   case ty' of
-    TyType l -> return l
+    TyType LProp -> return LProp
+    TyType LSet -> return LSet
+    TyType (LConst i) -> return (LConst i)
     _ -> Env.err [DS "Expected", DD tm, DS "to have type 'Type l' for some level l, but found", DD ty']
-
 -------------------------------------------------------------------------
 
 -- | Check that the given term has the expected type
@@ -226,8 +233,13 @@ checkType tm ty = do
             ]
         l1 <- tcType tyA
         Env.extendCtx (Decl (TypeDecl x ep1 tyA)) $ do
-          l2 <- tcType tyB
-          let l = imax l1 l2
+          l2 <- tcType tyB 
+          let l = case (l1, l2) of
+                (_, LProp) -> LProp
+                (_, LSet) -> LSet
+                (LConst i, LConst j) -> LConst (max i j)
+                (LProp, l) -> l
+                (LSet, l) -> l
           -- Ensure that l <= tyPiLevel (universe cumulativity)
           tyPiLevel <- tcType ty'
           unless (l <= tyPiLevel) $
@@ -263,7 +275,12 @@ checkType tm ty = do
           checkType a tyA
           Env.extendCtxs [mkDecl x tyA, Def x a] $ do
             l2 <- tcType tyB
-            let l = imax l1 l2
+            let l = case (l1, l2) of
+                 (_, LProp) -> LProp
+                 (_, LSet) -> LSet
+                 (LConst i, LConst j) -> LConst (max i j)
+                 (LProp, l) -> l
+                 (LSet, l) -> l
             -- Ensure that l <= tySigmaLevel (universe cumulativity)
             tySigmaLevel <- tcType ty'
             unless (l <= tySigmaLevel) $

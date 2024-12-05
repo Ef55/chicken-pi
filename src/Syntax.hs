@@ -1,5 +1,3 @@
-{-# LANGUAGE PatternSynonyms #-}
-
 -- | The abstract syntax of the simple dependently typed language
 -- See the comment at the top of 'Parser' for the concrete syntax of this language
 module Syntax where
@@ -59,22 +57,7 @@ levelAdd l i
       LProp -> LConst i
       LSet -> LConst i
       LConst j -> LConst (i + j)
-
--- data LevelExpr
---   = LEConst Level
---   | LMax LevelExpr LevelExpr
---   | LPlus LevelExpr Integer
---   deriving (Show, Eq, Generic)
---   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
-
--- evalLevelExpr :: LevelExpr -> Level
--- evalLevelExpr (LEConst l) = l
--- evalLevelExpr (LMax l r) = max (evalLevelExpr l) (evalLevelExpr r)
--- evalLevelExpr (LPlus l s) = levelAdd (evalLevelExpr l) s
-
--- instance Ord LevelExpr where
---   l <= r = evalLevelExpr l <= evalLevelExpr r
-
+      
 -- | Because types and terms use the same AST, we define the following
 -- type synonym so that we can hint whether a piece of syntax is being used
 -- as a type or as a term.
@@ -124,9 +107,6 @@ data Term
 newtype Branch = Branch {getBranch :: Unbound.Bind Pattern Term}
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
-  
-pattern Prop :: Term
-pattern Prop = TyType (LConst 0)
 
 -- | An argument to a function
 data Arg = Arg {argEp :: Epsilon, unArg :: Term}

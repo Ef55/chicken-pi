@@ -1,6 +1,6 @@
 module WildcardVar where
 
-data Unit : Type :=
+data Unit : Type 1 :=
   unit : Unit
 
 id : Unit -> Unit

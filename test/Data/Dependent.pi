@@ -1,10 +1,10 @@
 module Dependent where
 
-data Data : Type :=
-  C (X: Type) (x: X) (Y: Type) (X -> Y): Data
+-- data Data : Type :=
+-- C (X: Type) (x: X) (Y: Type) (X -> Y): Data
 
-Y : Data -> Type
-Y = \d . case d of C _ _ y _ -> y
+-- Y : Data -> Type
+-- Y = \d . case d of C _ _ y _ -> y
 
-f : (d: Data) -> Y d
-f = \d . case d of C _ x _ f -> f x
+-- f : (d: Data) -> Y d
+-- f = \d . case d of C _ x _ f -> f x

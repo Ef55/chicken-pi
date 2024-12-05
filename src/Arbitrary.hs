@@ -78,7 +78,7 @@ genTerm n
                             (1, TyEq <$> go True n' <*> go True n'),
               (1, Subst <$> go True n' <*> go True n'),
               (1, Contra <$> go True n'),
-              
+
               (1, genSigma n'),
               (1, Prod <$> genTerm n' <*> genTerm n'),
               (1, genLetPair n'),
@@ -88,7 +88,7 @@ genTerm n
 genLam :: Int -> Gen Term
 genLam n = do
     p <- genName
-    ep <- arbitrary 
+    ep <- arbitrary
     b <- genTerm n
     return $ Lam ep (Unbound.bind p b)
 
@@ -96,7 +96,7 @@ genLam n = do
 genPi :: Int -> Gen Term
 genPi n = do
     p <- genName
-    ep <- arbitrary 
+    ep <- arbitrary
     tyA <- genTerm n
     tyB <- genTerm n
     return $ TyPi ep tyA (Unbound.bind p tyB)
@@ -146,10 +146,7 @@ genLevel n
         (2, return (LConst 0)),
         (1, return (LConst 1))
       ]
-    | otherwise = frequency [
-        (3, LConst <$> arbitrarySizedNatural)
-      ]
-      where n' = n `div` 2
+    | otherwise = LConst <$> arbitrarySizedNatural
 
 -- Helper function for natural numbers
 arbitrarySizedNatural :: Gen Integer
@@ -172,7 +169,7 @@ instance Arbitrary Term where
     shrink (TyEq a b) = [a,b] ++ [TyEq a' b | a' <- QC.shrink a] ++ [TyEq a b' | b' <- QC.shrink b]
     shrink (Subst a b) = [a,b] ++ [Subst a' b | a' <- QC.shrink a] ++ [Subst a b' | b' <- QC.shrink b]
     shrink (Contra a) = a : [Contra a' | a' <- QC.shrink a]
-    
+
 
     shrink _ = []
 
