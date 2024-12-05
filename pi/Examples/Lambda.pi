@@ -8,7 +8,6 @@ import List
 
 -- Is is truly a programming language if no one implemented a typechecker
 -- for the Simply Typed Lambda Calculus (STLC) in it?
-
 data LType: Type :=
   Ground: LType
   Arrow (LType) (LType): LType
@@ -35,23 +34,30 @@ isValue = \t . case t Unit of
 LTerm1 : Type
 LTerm1 = (V: Type) -> V -> LTerm_ V
 
-subst_ : (V: Type) -> LTerm_ (LTerm_ V) -> LTerm_ V
-subst_ = \V t . case t of
+squash_ : (V: Type) -> LTerm_ (LTerm_ V) -> LTerm_ V
+squash_ = \V t . case t of
   Cst -> Cst V
   Var e -> e
-  Abs f -> Abs V (\x . subst_ V (f (Var V x)))
-  App l r -> App V (subst_ V l) (subst_ V r)
+  Abs f -> Abs V (\x . squash_ V (f (Var V x)))
+  App l r -> App V (squash_ V l) (squash_ V r)
 
 lsubst : LTerm1 -> LTerm -> LTerm
-lsubst = \f a V. subst_ V ((f (LTerm_ V)) (a V))
+lsubst = \f a V. squash_ V ((f (LTerm_ V)) (a V))
 
-cbvStep_ : (V: Type) -> LTerm_ V -> Maybe (LTerm_ V)
+cbvStep_ : (V: Type) -> LTerm_ (LTerm_ V) -> Maybe (LTerm_ (LTerm_ V))
 cbvStep_ = \V t . case t of
-  Cst -> Nothing (LTerm_ V)
-  Var _ -> Nothing (LTerm_ V)
-  Abs _ -> Nothing (LTerm_ V)
+  Cst -> Nothing (LTerm_ (LTerm_ V))
+  Var _ -> Nothing (LTerm_ (LTerm_ V))
+  Abs _ -> Nothing (LTerm_ (LTerm_ V))
   App l r -> case l of
-    Cst -> Nothing (LTerm_ V)
-    Var _ -> Nothing (LTerm_ V)
-    Abs f -> Some (subst_ (f (LTerm_ V) r))
-    App l' r' -> mapMaybe (LTerm_ V) (LTerm_ V) (\l'' . App V (App V l'' r') r) (cbvStep_ V l')
+    Cst -> Nothing (LTerm_ (LTerm_ V))
+    Var _ -> Nothing (LTerm_ (LTerm_ V))
+    Abs f -> Some (LTerm_ (LTerm_ V)) (f (squash_ V r))
+    App l' r' ->
+      let T = LTerm_ V in
+      maybe_map (LTerm_ T) (LTerm_ T) (\l'' . App T (App T l'' r') r) (cbvStep_ V l')
+
+cbvStep : LTerm -> (V: Type) -> Maybe (LTerm_ V)
+cbvStep = \t V .
+  maybe_map (LTerm_ (LTerm_ V)) (LTerm_ V)
+    (\t . squash_ V t) (cbvStep_ V (t (LTerm_ V)))              

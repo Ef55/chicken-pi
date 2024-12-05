@@ -70,7 +70,8 @@ examples =
   let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Fun", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma", "Fin", "Vect", "HList"])
    in testGroup
         "Examples"
-        [ dataExamples
+        [ dataExamples,
+          tcFile ["pi/Examples", "pi/Data"] "Lambda.pi"
         ]
 
 main :: IO ()
