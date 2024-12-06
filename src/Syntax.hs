@@ -3,7 +3,6 @@
 module Syntax where
 
 import Data.Function (on)
-import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -13,6 +12,7 @@ import GHC.Generics (Generic, from)
 import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos, newPos)
 import Unbound.Generics.LocallyNameless qualified as Unbound
 import Unbound.Generics.LocallyNameless.Internal.Fold qualified as Unbound
+import qualified Control.Monad
 
 -----------------------------------------
 
@@ -79,7 +79,7 @@ data Term
     Case Term DestructionPredicate [Branch]
   deriving (Show, Generic)
 
-newtype DestructionPredicate = DestructionPredicate { getPredicate :: Unbound.Bind (Maybe TName, Maybe Pattern) (Maybe Type) }
+newtype DestructionPredicate = DestructionPredicate {getPredicate :: Unbound.Bind (Maybe TName, Maybe Pattern) (Maybe Type)}
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
@@ -153,7 +153,7 @@ data Telescope
 data Constructor = Constructor {cstrName :: TName, cstrType :: Unbound.Bind Telescope Type}
   deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
-data TypeConstructor = TypeConstructor {typeName :: TName, typeSort :: Type, constructors :: Unbound.Bind Telescope [Constructor]}
+data TypeConstructor = TypeConstructor {typeName :: TName, typeDef :: Unbound.Bind Telescope (Type, [Constructor])}
   deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 -- | Entries are the components of modules
@@ -234,10 +234,35 @@ unbind2 b1 b2 = do
     Just (x, t, _, u) -> return (x, t, u)
     Nothing -> error "impossible"
 
+-----------------------------------------
+
+-- * Telescope operations
+
+-----------------------------------------
+
+foldTelescope :: (a -> (TName, Type) -> a) -> a -> Telescope -> a
+foldTelescope _ a Empty = a
+foldTelescope f a (Tele bnd) =
+  let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+   in foldTelescope f (f a (x, xType)) t'
+
+lengthTelescope :: Telescope -> Int
+lengthTelescope = foldTelescope (\c _ -> c + 1) 0
+
+telescopeToPi :: Telescope -> Type -> Type
+telescopeToPi t r = iter t
+  where
+    iter :: Telescope -> Type
+    iter Empty = r
+    iter (Tele bnd) = do
+      let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
+          b = iter t'
+       in TyPi Rel xType (Unbound.bind x b)
+
 instantiateTelescope :: (Unbound.Fresh m, Unbound.Alpha a, Unbound.Subst Term a) => Unbound.Bind Telescope a -> [Term] -> m ([Type], a)
 instantiateTelescope bnd args = do
   (telescope, a) <- Unbound.unbind bnd
-  let varTypes = teleToTypes telescope
+  let varTypes = telescopeToTypes telescope
       teleVars :: [TName] = Unbound.toListOf Unbound.fv telescope
       smap = zip teleVars args
       varTypes' = Unbound.substs smap varTypes
@@ -245,11 +270,8 @@ instantiateTelescope bnd args = do
   return (varTypes', a')
 
   where
-    teleToTypes :: Telescope -> [Type]
-    teleToTypes Empty = []
-    teleToTypes (Tele bnd) =
-      let ((_, Unbound.Embed t), t') = Unbound.unrebind bnd
-      in t : teleToTypes t'
+    telescopeToTypes :: Telescope -> [Type]
+    telescopeToTypes = reverse . foldTelescope (\t (_, x) -> x : t) []
 
 ------------------
 

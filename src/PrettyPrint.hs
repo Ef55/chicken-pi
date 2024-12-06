@@ -203,8 +203,8 @@ instance Display Entry where
     pure $ dn <+> PP.text "=" <+> dt
   display (Decl decl) = display decl
   display (Demote ep) = return mempty
-  display (Data (TypeConstructor typeName sort pack)) =
-    Unbound.lunbind pack $ \(params, cstrs) -> do
+  display (Data (TypeConstructor typeName pack)) =
+    Unbound.lunbind pack $ \(params, (sort, cstrs)) -> do
       dtn <- display typeName
       dp <- display params
       ds <- display sort

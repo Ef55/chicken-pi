@@ -260,7 +260,7 @@ dataDef = do
   s <- expr
   reservedOp ":="
   constructors <- layout constructorDef (return ())
-  return $ Data $ TypeConstructor tName s (Unbound.bind params constructors)
+  return $ Data $ TypeConstructor tName (Unbound.bind params (s, constructors))
   where
     constructorDef = do
       name <- variable

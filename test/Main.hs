@@ -41,7 +41,7 @@ tests =
           $ positiveTests "test/Matching" ["Subst", "Eval", "Wildcard"]
             ++ negativeTests
               "test/Matching"
-              [ ("Type mentioned in return clause must match", "WrongInName", "???")
+              [ ("Type mentioned in return clause must match", "WrongInName", "'in' clause.*D1.*should be.*D0")
               ]
 
       positivityTests =
