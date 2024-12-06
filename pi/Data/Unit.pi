@@ -1,4 +1,4 @@
 module Unit where
 
-data Unit: Type :=
+data Unit: Set :=
   unit: Unit

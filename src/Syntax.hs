@@ -33,6 +33,31 @@ type TName = Unbound.Name Term
 
 -----------------------------------------
 
+-- | "Constant" levels
+data Level
+  = LProp -- ^ The non-computational level 0
+  | LSet -- ^ The computational level 0
+  | LConst Integer -- ^ Constant levels like 1, 2, ... (Type i in Coq's vocabulary)
+  deriving (Show, Eq, Generic)
+  deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
+instance Ord Level where
+  LProp <= LProp = True
+  LSet <= LSet = True
+  LProp <= LConst _ = True
+  LSet <= LConst _ = True
+  LConst n <= LConst m = n <= m
+  _ <= _ = False
+
+-- Only allowing positive shifts simplifies things greatly
+levelAdd :: Level -> Integer -> Level
+levelAdd l i
+  | i < 0 = error "Cannot offset universes by non-negative amounts"
+  | i == 0 = l
+  | otherwise = case l of
+      LProp -> LConst i
+      LSet -> LConst i
+      LConst j -> LConst (i + j)
+      
 -- | Because types and terms use the same AST, we define the following
 -- type synonym so that we can hint whether a piece of syntax is being used
 -- as a type or as a term.
@@ -41,7 +66,7 @@ type Type = Term
 -- | basic language
 data Term
   = -- | type of types, concretely `Type`
-    TyType
+    TyType Level
   | -- | variable `x`
     Var TName
   | -- | abstraction  `\x. a`

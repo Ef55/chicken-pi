@@ -49,13 +49,16 @@ genName = Unbound.string2Name <$> elements ["x", "y", "z", "x0" , "y0"]
 instance Arbitrary (Unbound.Name a) where
     arbitrary = genName
 
-
-
 -- * Core language
 
 -- Terms with no subterms
 base :: Gen Term
-base = elements [TyType, TrustMe, PrintMe, Refl  ]
+base = frequency [
+    (2, TyType <$> arbitrary),      -- Generate TyType with arbitrary Level
+    (1, return TrustMe),
+    (1, return PrintMe),
+    (1, return Refl)
+  ]
 
 -- Generate a random term
 -- In the inner recursion, the bool prevents the generation of TyCon/DataCon applications 
@@ -75,7 +78,7 @@ genTerm n
                             (1, TyEq <$> go True n' <*> go True n'),
               (1, Subst <$> go True n' <*> go True n'),
               (1, Contra <$> go True n'),
-              
+
               (1, genSigma n'),
               (1, Prod <$> genTerm n' <*> genTerm n'),
               (1, genLetPair n'),
@@ -85,7 +88,7 @@ genTerm n
 genLam :: Int -> Gen Term
 genLam n = do
     p <- genName
-    ep <- arbitrary 
+    ep <- arbitrary
     b <- genTerm n
     return $ Lam ep (Unbound.bind p b)
 
@@ -93,7 +96,7 @@ genLam n = do
 genPi :: Int -> Gen Term
 genPi n = do
     p <- genName
-    ep <- arbitrary 
+    ep <- arbitrary
     tyA <- genTerm n
     tyB <- genTerm n
     return $ TyPi ep tyA (Unbound.bind p tyB)
@@ -134,6 +137,20 @@ instance Arbitrary Epsilon where
     arbitrary = elements [ Rel, Irr ]
 
 
+instance Arbitrary Level where
+    arbitrary = sized genLevel
+
+genLevel :: Int -> Gen Level
+genLevel n
+    | n <= 0 = frequency [
+        (2, return (LConst 0)),
+        (1, return (LConst 1))
+      ]
+    | otherwise = LConst <$> arbitrarySizedNatural
+
+-- Helper function for natural numbers
+arbitrarySizedNatural :: Gen Integer
+arbitrarySizedNatural = abs <$> arbitrary
 
 
 
@@ -152,7 +169,7 @@ instance Arbitrary Term where
     shrink (TyEq a b) = [a,b] ++ [TyEq a' b | a' <- QC.shrink a] ++ [TyEq a b' | b' <- QC.shrink b]
     shrink (Subst a b) = [a,b] ++ [Subst a' b | a' <- QC.shrink a] ++ [Subst a b' | b' <- QC.shrink b]
     shrink (Contra a) = a : [Contra a' | a' <- QC.shrink a]
-    
+
 
     shrink _ = []
 

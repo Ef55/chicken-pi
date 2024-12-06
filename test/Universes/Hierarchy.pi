@@ -5,9 +5,6 @@ module Hierarchy where
 prop : Type 1
 prop = Prop
 
-propImpredicativity : Prop
-propImpredicativity = Prop
-
 set : Type 1
 set = Set
 
@@ -22,11 +19,25 @@ someType2 = Type 1047
 
 -- Tests for some constructs
 
-propForall : Prop
+propForall : Type 1
 propForall = Prop -> Prop
 
-typeArrow0 : Type 42
+typeArrow0 : Type 43
 typeArrow0 = Type 14 -> Type 42
 
-typeArrow1 : Type 42
+typeArrow1 : Type 43
 typeArrow1 = Type 42 -> Type 14
+
+-- Testing impredicative prop
+
+someType3 : Type 2
+someType3 = Type 1
+
+eqEx : Prop
+eqEx = someType0 = someType3
+
+impredPi : Prop
+impredPi = Type 42 -> eqEx
+
+impredSigma : Prop 
+impredSigma = { x : someType0 | eqEx }

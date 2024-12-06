@@ -1,10 +1,10 @@
 module Subst where
 
-data Data: Type :=
+data Data: Type 1 :=
   One : Data
   Two : Data
 
-data Data': Type :=
+data Data': Type 1 :=
   One' : Data'
   Two' : Data'
 
