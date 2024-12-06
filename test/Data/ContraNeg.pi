@@ -1,0 +1,10 @@
+module ContraNeg where
+
+data Void: Type := {}
+
+data D0: Type :=
+  C00: D0
+  C01: D0
+
+f0: C00 = C00 -> Void
+f0 = \c . contra c

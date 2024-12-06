@@ -27,12 +27,12 @@ Note that these should not necessarily be done in order.
    datatypes and pattern matching:
    - [X] [(Strict) positivity](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html) check.
    - [ ] "[Guardness](https://link.springer.com/chapter/10.1007/3-540-60579-7_3)" check.
-   - [ ] [Dependent pattern matching](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html#the-match-with-end-construction) (i.e. `as` and `return`).
+   - [X] [Dependent pattern matching](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html#the-match-with-end-construction) (i.e. `as` and `return`).
    - [X] Type parameters.
    - [ ] Uniform type parameters.
    - [ ] Type indices + pattern matching extension (`in`)
    - [ ] `if-then-else` as an alias for pattern matching
-   - [ ] Support `data` equalities in `Contra`.
+   - [X] Support `data` equalities in `Contra`.
 
 ## Known differences with Coq
 

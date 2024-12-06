@@ -6,6 +6,7 @@ module Equal
     equate,
     unify,
     unconstruct,
+    maybeUnconstruct,
     instantiateConstructorType,
   )
 where

@@ -353,14 +353,44 @@ checkType tm ty = do
         _ -> Env.err [DS "Contra requires an equality type, not", DD ty']
       a' <- Equal.whnf a
       b' <- Equal.whnf b
-      -- TODO: extend to datatypes
-      case (a', b') of
-        (_, _) ->
+      case (Equal.maybeUnconstruct a', Equal.maybeUnconstruct b') of
+        (Just (c1, _), Just (c2, _)) -> do
+          t1 <- Env.lookupConstructor c1
+          t2 <- Env.lookupConstructor c2
+          case (t1, t2) of
+            (Just _, Just _) ->
+              if c1 /= c2
+                then return ()
+                else
+                  Env.err
+                    [ DS "I can't tell that",
+                      DD a',
+                      DS "and",
+                      DD b',
+                      DS "are contradictory.",
+                      DD c1,
+                      DS "and",
+                      DD c2,
+                      DS "are the same constructor."
+                    ]
+            _ ->
+              Env.err
+                [ DS "I can't tell that",
+                  DD a',
+                  DS "and",
+                  DD b',
+                  DS "are contradictory.",
+                  DD c1,
+                  DS "or",
+                  DD c2,
+                  DS "is not a constructor."
+                ]
+        _ ->
           Env.err
             [ DS "I can't tell that",
-              DD a,
+              DD a',
               DS "and",
-              DD b,
+              DD b',
               DS "are contradictory"
             ]
     (Case scrut pred branches) -> void $ checkCase scrut pred branches (Just ty')

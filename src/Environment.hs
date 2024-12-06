@@ -10,6 +10,7 @@ module Environment
     lookupTyMaybe,
     lookupDef,
     lookupHint,
+    lookupConstructor,
     lookupTypeConstructor,
     getCtx,
     getLocalCtx,
@@ -186,6 +187,26 @@ lookupTypeConstructor name = do
       | otherwise = go ctx
     go (_ : ctx) = go ctx
     go [] = Nothing
+
+lookupConstructor ::
+  (MonadReader Env m) =>
+  TName ->
+  m (Maybe TypeConstructor)
+lookupConstructor name = do
+  ctx <- asks ctx
+  return $ go ctx
+  where
+    go :: [Entry] -> Maybe TypeConstructor
+    go ((Data tc) : ctx) = checkConstructors tc <|> go ctx
+    go (_ : ctx) = go ctx
+    go [] = Nothing
+
+    checkConstructors :: TypeConstructor -> Maybe TypeConstructor
+    checkConstructors tc@(TypeConstructor _ bnd) =
+      let names = Unbound.runFreshM $ do
+            (_, (_, cstrs)) <- Unbound.unbind bnd
+            return $ map (\(Constructor n _) -> n) cstrs
+       in if name `elem` names then Just tc else Nothing
 
 -- | Extend the context with a new entry
 extendCtx :: (MonadReader Env m) => Entry -> m a -> m a

@@ -1,0 +1,18 @@
+module ContraPos where
+
+data Void: Type := {}
+
+data D0: Type :=
+  C00: D0
+  C01: D0
+
+f0: C00 = C01 -> Void
+f0 = \c . contra c
+
+data D1: Type :=
+  C10: D1
+  C11 (D0) (D1): D1
+  C12 (D0) (D1): D1
+
+f1: (a: D0) -> (b: D1) -> C11 a b = C12 a b -> Void
+f1 = \_ _ c . contra c

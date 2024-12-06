@@ -28,11 +28,13 @@ tests :: TestTree
 tests =
   let dataTests =
         testGroup "Data" $
-          positiveTests "test/Data" ["Dependent", "MultiParams"]
+          positiveTests "test/Data" ["Dependent", "MultiParams", "ContraPos"]
             ++ negativeTests
               "test/Data"
               [ ("Constructors must be for the type being defined", "DefinesOtherType", "C1.*has type D0.*should be constructor for D1"),
-                ("Constructors must fully apply the type being defined", "NotFullyApplied", "should have type.*fully applied?")
+                ("Constructors must fully apply the type being defined", "NotFullyApplied", "should have type.*fully applied?"),
+                ("Contradiction requires different constructors", "ContraNeg", "same constructor"),
+                ("Inner contradiction (unsupported)", "InnerContra", "same constructor")
               ]
 
       matchingTests =

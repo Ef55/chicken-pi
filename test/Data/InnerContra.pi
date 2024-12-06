@@ -1,0 +1,17 @@
+module InnerContra where
+
+data Void: Type := {}
+
+data D0: Type :=
+  C00: D0
+  C01: D0
+  
+data D1: Type :=
+  C10: D1
+  C11 (D0) (D1): D1
+  C12 (D0) (D1): D1
+
+-- Should ideally be supported
+
+f1: (b: D1) -> C11 C00 b = C11 C01 b -> Void
+f1 = \_ c . contra c
