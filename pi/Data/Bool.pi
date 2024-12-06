@@ -1,6 +1,6 @@
 module Bool where
 
-data Bool : Type 1 :=
+data Bool : Set :=
   True : Bool
   False : Bool
 

@@ -20,13 +20,13 @@ someType2 = Type 1047
 -- Tests for some constructs
 
 propForall : Type 1
-propForall = [Prop] -> Prop
+propForall = Prop -> Prop
 
 typeArrow0 : Type 43
-typeArrow0 = [Type 14] -> Type 42
+typeArrow0 = Type 14 -> Type 42
 
 typeArrow1 : Type 43
-typeArrow1 = [Type 42] -> Type 14
+typeArrow1 = Type 42 -> Type 14
 
 -- Testing impredicative prop
 
@@ -37,7 +37,7 @@ eqEx : Prop
 eqEx = someType0 = someType3
 
 impredPi : Prop
-impredPi = [Type 42] -> eqEx
+impredPi = Type 42 -> eqEx
 
 impredSigma : Prop 
 impredSigma = { x : someType0 | eqEx }

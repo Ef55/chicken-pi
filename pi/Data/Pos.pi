@@ -1,10 +1,10 @@
 module Pos where
 
-data Pos : Type 1 :=
+data Pos : Set :=
   O : Pos
   S (Pos): Pos
 
-data BinPos : Type 1 :=
+data BinPos : Set :=
   MSB : BinPos
   xI (BinPos): BinPos
   xO (BinPos): BinPos
