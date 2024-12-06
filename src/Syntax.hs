@@ -170,6 +170,8 @@ data Entry
     Def TName Term
   | -- | The definition of a datatype
     Data TypeConstructor
+  | -- | Structurally smaller by pattern matching
+    Smaller Term TName
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 

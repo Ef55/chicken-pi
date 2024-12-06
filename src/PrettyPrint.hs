@@ -207,6 +207,10 @@ instance Display Entry where
       let top = PP.text "data" <+> dtn <+> dp <+> PP.text ":" <+> ds <+> PP.text ":="
       constructors <- mapM display cstrs
       return $ top $$ PP.nest 2 (PP.vcat constructors)
+  display (Smaller l r) = do
+    dl <- display l
+    dr <- display r
+    return $ dl <+> PP.text ">>" <+> dr
 
 -------------------------------------------------------------------------
 

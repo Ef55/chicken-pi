@@ -124,7 +124,7 @@ isEmptyOrSingleton (TypeConstructor _ pack) = do
 checkCase :: Term -> DestructionPredicate -> [Branch] -> Maybe Type -> TcMonad Type
 checkCase scrut pred branches mRet = do
   (typeDecl, typeParams, pred, ret) <- checkScrutinee scrut pred mRet
-  checkMatch pred typeDecl typeParams branches
+  checkMatch scrut pred typeDecl typeParams branches
   return ret
 
 instantiateDestructionPredicate :: Term -> [Type] -> Unbound.Bind (TName, Pattern) Type -> TcMonad Type
@@ -228,8 +228,8 @@ checkScrutinee s p@(DestructionPredicate bPred) mExp = do
           paramCount = length params
       return $ splitAt paramCount args
 
-checkMatch :: Unbound.Bind (TName, Pattern) Type -> TypeConstructor -> [Type] -> [Branch] -> TcMonad ()
-checkMatch ret (TypeConstructor typeName pack) typeParams branches = do
+checkMatch :: Term -> Unbound.Bind (TName, Pattern) Type -> TypeConstructor -> [Type] -> [Branch] -> TcMonad ()
+checkMatch scrut ret (TypeConstructor typeName pack) typeParams branches = do
   (_, (_, constructors)) <- instantiateTelescope pack typeParams
 
   when (length branches /= length constructors) $
@@ -238,10 +238,10 @@ checkMatch ret (TypeConstructor typeName pack) typeParams branches = do
         DD typeName,
         DS $ "has " ++ show (length constructors) ++ " constructors."
       ]
-  mapM_ (uncurry (checkBranch ret typeParams)) (zip constructors branches)
+  mapM_ (uncurry (checkBranch scrut ret typeParams)) (zip constructors branches)
 
-checkBranch :: Unbound.Bind (TName, Pattern) Type -> [Type] -> Constructor -> Branch -> TcMonad ()
-checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch branch) = do
+checkBranch :: Term -> Unbound.Bind (TName, Pattern) Type -> [Type] -> Constructor -> Branch -> TcMonad ()
+checkBranch concreteScrut retPred typeParams cstr@(Constructor cstrName cstrType) (Branch branch) = do
   (pat@(PatCon cstrStr xs), body) <- Unbound.unbind branch
   when (cstrName /= string2Name cstrStr) $
     Env.err
@@ -254,13 +254,15 @@ checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch bran
 
   let cstrVars = Var <$> xs
       cstrArgs = typeParams ++ cstrVars
-      scrut = foldl App (Var cstrName) cstrArgs
+      abstractScrut = foldl App (Var cstrName) cstrArgs
   typeArgs <- Equal.instantiateConstructorType cstrName cstrArgs
-  ret <- instantiateDestructionPredicate scrut typeArgs retPred
+  ret <- instantiateDestructionPredicate abstractScrut typeArgs retPred
 
   -- Retrieve the type of the bindings in the telescope
   (telescope, _) <- instantiateTelescope cstrType cstrVars
-  let entries = zipWith (\x t -> Decl $ TypeDecl x t) xs telescope
+  let typingEntries = zipWith (\x t -> Decl $ TypeDecl x t) xs telescope
+      smallerEntries = map (Smaller concreteScrut) xs
+      entries = typingEntries ++ smallerEntries
 
   when (length telescope /= length xs) $
     Env.err
@@ -576,17 +578,18 @@ tcEntry dat@(Data (TypeConstructor typ pack)) = do
   -- Unpacking
   (params, (arity, constructors)) <- Unbound.unbind pack
   let td = TypeDecl typ (telescopeToPi params arity)
-
   -- Typecheck the type definition
   _ <- tcType (declType td)
   -- Check that we are defining the arity of a sort
   sort <- isArityOfSort arity
   -- Check that the name of that type is not already defined
   duplicateTypeBindingCheck td
-
+  -- Check the constructors
   cstrs <- Env.extendCtx (Decl td) $ mapM (tcConstructor params (typ, sort)) constructors
+  -- Return env's extensions
   let decls = Decl <$> cstrs
   return $ AddCtx (dat : Decl td : decls)
+tcEntry (Smaller _ _) = Env.err [ DS "User defined smaller declarations are not allowed." ]
 
 tcConstructor :: Telescope -> (TName, Type) -> Constructor -> TcMonad TypeDecl
 tcConstructor typeTelescope (dataTypeName, sort) (Constructor name cstrType) = do
