@@ -5,7 +5,9 @@ module PrettyPrint (Disp (..), D (..), SourcePos, PP.Doc, PP.render, pp, debug) 
 
 import Control.Monad (foldM)
 import Control.Monad.Reader (MonadReader (ask, local), asks)
+import Data.Maybe qualified as Maybe
 import Data.Set qualified as S
+import GHC.Base (Alternative ((<|>)))
 import Syntax
 import Text.ParserCombinators.Parsec.Error (ParseError)
 import Text.ParserCombinators.Parsec.Pos (SourcePos, sourceColumn, sourceLine, sourceName)
@@ -13,8 +15,6 @@ import Text.PrettyPrint (Doc, ($$), (<+>))
 import Text.PrettyPrint qualified as PP
 import Unbound.Generics.LocallyNameless qualified as Unbound
 import Unbound.Generics.LocallyNameless.Internal.Fold (toListOf)
-import GHC.Base (Alternative((<|>)))
-import qualified Data.Maybe as Maybe
 
 -------------------------------------------------------------------------
 
@@ -134,10 +134,6 @@ instance Disp [Entry]
 
 instance Disp TypeDecl
 
-instance Disp Arg
-
-instance Disp [Arg]
-
 instance Disp Constructor
 
 instance Disp Telescope
@@ -175,12 +171,13 @@ instance Display Telescope where
     dx <- display x
     dt <- display xType
     dT <- display tele'
-    return $ PP.text "("
-                      PP.<> dx
-                      PP.<> PP.text ":"
-                      PP.<> dt
-                      PP.<> PP.text ")"
-                      PP.<> dT
+    return $
+      PP.text "("
+        PP.<> dx
+        PP.<> PP.text ":"
+        PP.<> dt
+        PP.<> PP.text ")"
+        PP.<> dT
 
 instance Display TypeDecl where
   display decl = do
@@ -202,7 +199,6 @@ instance Display Entry where
     dt <- display term
     pure $ dn <+> PP.text "=" <+> dt
   display (Decl decl) = display decl
-  display (Demote ep) = return mempty
   display (Data (TypeConstructor typeName pack)) =
     Unbound.lunbind pack $ \(params, (sort, cstrs)) -> do
       dtn <- display typeName
@@ -211,12 +207,6 @@ instance Display Entry where
       let top = PP.text "data" <+> dtn <+> dp <+> PP.text ":" <+> ds <+> PP.text ":="
       constructors <- mapM display cstrs
       return $ top $$ PP.nest 2 (PP.vcat constructors)
-
-instance Disp Epsilon where
-  disp Irr = PP.text "irrelevant"
-  disp Rel = PP.text "relevant"
-
-  debugDisp = disp
 
 -------------------------------------------------------------------------
 
@@ -345,9 +335,6 @@ instance Display (Unbound.Name Term) where
     b <- ask showLongNames
     return (if b then debugDisp n else disp n)
 
-instance Display [Arg] where
-  display a = PP.sep <$> mapM display a
-
 instance Display Term where
   display (TyType LProp) = return $ PP.text "Prop"
   display (TyType LSet) = return $ PP.text "Set"
@@ -355,7 +342,7 @@ instance Display Term where
     i <- display l
     return $ PP.text "Type" <+> i
   display (Var n) = display n
-  display a@(Lam _ b) = do
+  display a@(Lam b) = do
     n <- ask prec
     (binds, body) <- withPrec levelLam $ gatherBinders a
     return $ parens (levelLam < n) $ PP.hang (PP.text "\\" PP.<> PP.sep binds PP.<> PP.text ".") 2 body
@@ -364,7 +351,7 @@ instance Display Term where
     df <- withPrec levelApp (display f)
     dx <- withPrec (levelApp + 1) (display x)
     return $ parens (levelApp < n) $ df <+> dx
-  display (TyPi ep a bnd) = do
+  display (TyPi a bnd) = do
     Unbound.lunbind bnd $ \(n, b) -> do
       p <- ask prec
       lhs <-
@@ -372,11 +359,8 @@ instance Display Term where
           then do
             dn <- display n
             da <- withPrec 0 (display a)
-            return $ mandatoryBindParens ep (dn <+> PP.colon <+> da)
-          else do
-            case ep of
-              Rel -> withPrec (levelArrow + 1) (display a)
-              Irr -> PP.brackets <$> (withPrec 0 (display a))
+            return $ PP.parens (dn <+> PP.colon <+> da)
+          else withPrec (levelArrow + 1) (display a)
       db <- withPrec levelPi (display b)
       return $ parens (levelArrow < p) $ lhs <+> PP.text "->" <+> db
   display (Ann a b) = do
@@ -485,12 +469,6 @@ instance Display Term where
       parens (levelCase < p) $
         if null cases then top <+> PP.text "{ }" else top $$ PP.nest 2 (PP.vcat db)
 
-instance Display Arg where
-  display arg =
-    case argEp arg of
-      Irr -> PP.brackets <$> withPrec 0 (display (unArg arg))
-      Rel -> display (unArg arg)
-
 instance Display DestructionPredicate where
   display (DestructionPredicate bnd) = Unbound.lunbind bnd $ \((mAs, mIn), mRet) -> do
     dAs <- maybeDisplay mAs $ \r -> const (PP.text "as ") <> display r
@@ -500,9 +478,9 @@ instance Display DestructionPredicate where
 
 instance Display Pattern where
   display (PatCon cstrName bindings) = do
-      cstr <- display cstrName
-      args <- mapM display bindings
-      return $ cstr <+> PP.fsep args
+    cstr <- display cstrName
+    args <- mapM display bindings
+    return $ cstr <+> PP.fsep args
 
 instance Display (Unbound.Bind Pattern Term) where
   display caze = Unbound.lunbind caze $ \(pat, branch) ->
@@ -526,29 +504,15 @@ instance Display (Unbound.Bind Pattern Term) where
 -------------------------------------------------------------------------
 
 gatherBinders :: Term -> DispInfo -> ([Doc], Doc)
-gatherBinders (Lam ep b) =
+gatherBinders (Lam b) =
   Unbound.lunbind b $ \(n, body) -> do
     dn <- display n
-    let db = bindParens ep dn
+    let db = dn
     (rest, body') <- gatherBinders body
     return (db : rest, body')
 gatherBinders body = do
   db <- display body
   return ([], db)
-
-precBindParens :: Epsilon -> Bool -> Doc -> Doc
-precBindParens Rel b d = parens b d
-precBindParens Irr b d = PP.brackets d
-
--- | Add [] for irrelevant arguments, leave other arguments alone
-bindParens :: Epsilon -> Doc -> Doc
-bindParens Rel d = d
-bindParens Irr d = PP.brackets d
-
--- | Always add () or [], shape determined by epsilon
-mandatoryBindParens :: Epsilon -> Doc -> Doc
-mandatoryBindParens Rel d = PP.parens d
-mandatoryBindParens Irr d = PP.brackets d
 
 maybeDisplay :: Maybe a -> (a -> DispInfo -> Doc) -> DispInfo -> Doc
 maybeDisplay Nothing _ = return PP.empty

@@ -26,8 +26,6 @@ module Environment
     extendErr,
     D (..),
     Err (..),
-    withStage,
-    checkStage,
     freshWildcard,
   )
 where
@@ -133,18 +131,12 @@ lookupTyMaybe v = do
       let r1 = testDecl sig
       r2 <- go ctx
       return $ r1 <|> r2
-    go (Demote ep : ctx) = do
-      r <- go ctx
-      return $ demoteDecl ep <$> r
     go (_ : ctx) = go ctx
     go [] = return Nothing
 
     testDecl :: TypeDecl -> Maybe TypeDecl
     testDecl decl =
       if v == declName decl then Just decl else Nothing
-
-demoteDecl :: Epsilon -> TypeDecl -> TypeDecl
-demoteDecl ep s = s {declEp = min ep (declEp s)}
 
 -- | Find the type of a name specified in the context
 -- throwing an error if the name doesn't exist
@@ -302,19 +294,3 @@ warn :: (Disp a, MonadReader Env m, MonadWriter [String] m) => a -> m ()
 warn e = do
   loc <- getSourceLocation
   tell ["warning: " ++ render (disp (Err loc (disp e)))]
-
-checkStage ::
-  (MonadReader Env m, MonadError Err m) =>
-  Epsilon ->
-  m ()
-checkStage ep1 = do
-  unless (ep1 <= Rel) $ do
-    err
-      [ DS "Cannot access",
-        DD ep1,
-        DS "variables in this context"
-      ]
-
-withStage :: (MonadReader Env m) => Epsilon -> m a -> m a
-withStage Irr = extendCtx (Demote Rel)
-withStage ep = id

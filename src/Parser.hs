@@ -329,7 +329,7 @@ expr = do
       do
         n <- Unbound.fresh wildcardName
         return $ \tyA tyB ->
-          TyPi Rel tyA (Unbound.bind n tyB)
+          TyPi tyA (Unbound.bind n tyB)
     mkTupleType =
       do
         n <- Unbound.fresh wildcardName
@@ -345,12 +345,7 @@ term = funapp <|> patternMatching
 funapp :: LParser Term
 funapp = do
   f <- factor
-  foldl' app f <$> many bfactor
-  where
-    bfactor =
-      ((,Irr) <$> brackets expr)
-        <|> ((,Rel) <$> factor)
-    app e1 (e2, ep) = App e1 (Arg ep e2)
+  foldl' App f <$> many factor
 
 factor =
   choice
@@ -366,21 +361,13 @@ factor =
       contra <?> "a contra",
       trustme <?> "TRUSTME",
       printme <?> "PRINTME",
-      impProd <?> "an implicit function type",
       sigmaTy <?> "a sigma type",
       expProdOrAnnotOrParens <?> "an explicit function type or annotated expression"
     ]
 
-
-impOrExpVar :: LParser (TName, Epsilon)
-impOrExpVar =
-  try ((,Irr) <$> (brackets varOrWildcard))
-    <|> (,Rel) <$> varOrWildcard
-
 integer :: LParser Integer
 integer = Token.integer tokenizer
 
--- | Parser for 'Type' with a mandatory level, e.g., 'Type 0', 'Type 1', etc.
 typen :: LParser Term
 typen = do
   reserved "Type"                      -- Parse the keyword 'Type' and consume trailing space
@@ -401,12 +388,12 @@ set = do
 lambda :: LParser Term
 lambda = do
   reservedOp "\\"
-  binds <- many1 impOrExpVar
+  binds <- many1 varOrWildcard
   dot
   body <- expr
   return $ foldr lam body binds
   where
-    lam (x, ep) m = Lam ep (Unbound.bind x m)
+    lam x m = Lam (Unbound.bind x m)
 
 letExpr :: LParser Term
 letExpr =
@@ -430,19 +417,6 @@ letPairExp = do
   scrut <- expr
   reserved "in"
   LetPair scrut . Unbound.bind (x, y) <$> expr
-
--- impProd - implicit dependent products
--- These have the syntax [x:a] -> b or [a] -> b .
-impProd :: LParser Term
-impProd =
-  do
-    (x, tyA) <-
-      brackets
-        ( try ((,) <$> variable <*> (colon >> expr))
-            <|> ((,) <$> Unbound.fresh wildcardName <*> expr)
-        )
-    reservedOp "->"
-    TyPi Irr tyA . Unbound.bind x <$> expr
 
 -- Pattern matching
 patternMatching :: LParser Term
@@ -508,7 +482,7 @@ expProdOrAnnotOrParens =
               (Ann (Var x) a)
               ( do
                   b <- afterBinder
-                  return $ TyPi Rel a (Unbound.bind x b)
+                  return $ TyPi a (Unbound.bind x b)
               )
           Colon a b -> return $ Ann a b
           Comma a b ->
