@@ -30,7 +30,7 @@ Note that these should not necessarily be done in order.
    - [X] [Dependent pattern matching](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html#the-match-with-end-construction) (i.e. `as` and `return`).
    - [X] Type parameters.
    - [ ] Uniform type parameters.
-   - [ ] Type indices + pattern matching extension (`in`)
+   - [X] Type indices + pattern matching extension (`in`)
    - [ ] `if-then-else` as an alias for pattern matching
    - [X] Support `data` equalities in `Contra`.
 
