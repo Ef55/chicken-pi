@@ -74,6 +74,10 @@ inferType a = case a of
       (TyPi tyA bnd) -> do
         checkType b tyA
         return (instantiate bnd b)
+      (Guarded x (TyPi tyA bnd)) -> do
+        checkType b tyA
+        structurallySmaller x b
+        return (instantiate bnd b)
       _ -> Env.err [DS "Expected a function type but found", DD a, DS "of type", DD ty1]
 
   -- i-ann
@@ -120,6 +124,33 @@ isEmptyOrSingleton (TypeConstructor _ pack) = do
     [] -> True -- Empty type
     [_] -> True -- Singleton type
     _ -> False -- More than one constructor
+
+structurallySmaller :: TName -> Term -> TcMonad ()
+structurallySmaller p t = do
+  t' <- Equal.whnf t
+  case t' of
+    Var n -> do
+      decreasing <- Env.lookupSmaller (Var p) n
+      unless decreasing err
+    App l _ -> structurallySmaller p l
+    Lam bnd -> do
+      (_, body) <- Unbound.unbind bnd
+      structurallySmaller p body
+    _ -> err
+
+  where
+    err :: TcMonad () = do
+      gamma <- Env.getLocalCtx
+      Env.err
+        [ DS "Recursive calls requires",
+          DD t,
+          DS "to be structurally smaller than",
+          DD p,
+          DS "which could not be ensured. Context:",
+          DD gamma
+        ]
+
+-------------------------------------------------------------------------
 
 checkCase :: Term -> DestructionPredicate -> [Branch] -> Maybe Type -> TcMonad Type
 checkCase scrut pred branches mRet = do
@@ -350,27 +381,39 @@ checkType tm ty = do
           checkType body tyB
         return ()
       _ -> Env.err [DS "Lambda expression should have a function type, not", DD ty']
-
     (Fix bnd) -> do
       ((self, xs), bnd') <- Unbound.unbind bnd
-      (ctx, ty'') <- introBindings xs [] ty'
-      Env.extendCtxs (Decl (TypeDecl self ty') : ctx) $
-        case ty'' of
-          (TyPi tyA bnd2) -> do
-            -- unbind the variables in the lambda expression and pi type
-            (x, body, tyB) <- unbind2 bnd' bnd2
-            -- check the type of the body of the lambda expression
-            Env.extendCtx (Decl (TypeDecl x tyA)) (checkType body tyB)
-          _ -> Env.err [ DS "Found type", DD ty'', DS "while fix still has to introduce its last argument."]
+      (paramTypes, ty'') <- introBindings xs [] ty'
+      case ty'' of
+        (TyPi tyA bnd2) -> do
+          -- unbind the variables in the lambda expression and pi type
+          (x, body, tyB) <- unbind2 bnd' bnd2
+          -- check the type of the body of the lambda expression
+          let guardedTy =
+                foldr
+                  (\(x, t) r -> TyPi t $ Unbound.bind x r)
+                  (Guarded x $ TyPi tyA $ Unbound.bind x tyB)
+                  (zip xs paramTypes)
+          -- Env.warn [DD ty', DS "|", DD guardedTy]
+          Env.extendCtxs
+            ( -- Add a binding for this recursive function...
+              Decl (TypeDecl self guardedTy)
+                -- ... another one for the recursive parameter...
+                : Decl (TypeDecl x tyA)
+                -- ... and for all the other parameters.
+                : (Decl <$> zipWith TypeDecl xs paramTypes)
+            )
+            $ checkType body tyB
+        _ -> Env.err [DS "Found type", DD ty'', DS "while fix still has to introduce its last argument."]
       where
-        introBindings :: [TName] -> [Entry] -> Type -> TcMonad ([Entry], Type)
+        introBindings :: [TName] -> [Type] -> Type -> TcMonad ([Type], Type)
         introBindings [] acc r = return (reverse acc, r)
         introBindings (b : bs) acc r =
           case r of
             (TyPi tyA bnd) -> do
               r' <- Equal.whnf $ Unbound.instantiate bnd [Var b]
-              introBindings bs (Decl (TypeDecl b tyA) : acc) r'
-            _ -> Env.err [ DS "Found type", DD r, DS "while fix still has to introduce", DD b]
+              introBindings bs (tyA : acc) r'
+            _ -> Env.err [DS "Found type", DD r, DS "while fix still has to introduce", DD b]
 
     -- Practicalities
     (Pos p a) ->
@@ -611,7 +654,7 @@ tcEntry dat@(Data (TypeConstructor typ pack)) = do
   -- Return env's extensions
   let decls = Decl <$> cstrs
   return $ AddCtx (dat : Decl td : decls)
-tcEntry (Smaller _ _) = Env.err [ DS "User defined smaller declarations are not allowed." ]
+tcEntry (Smaller _ _) = Env.err [DS "User defined smaller declarations are not allowed."]
 
 tcConstructor :: Telescope -> (TName, Type) -> Constructor -> TcMonad TypeDecl
 tcConstructor typeTelescope (dataTypeName, sort) (Constructor name cstrType) = do

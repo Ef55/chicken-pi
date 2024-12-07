@@ -12,6 +12,7 @@ module Environment
     lookupHint,
     lookupConstructor,
     lookupTypeConstructor,
+    lookupSmaller,
     getCtx,
     getLocalCtx,
     extendCtx,
@@ -52,6 +53,7 @@ import PrettyPrint (D (..), Disp (..), Doc, SourcePos, render)
 import Syntax
 import Text.PrettyPrint.HughesPJ (nest, sep, text, vcat, ($$))
 import Unbound.Generics.LocallyNameless qualified as Unbound
+import qualified Data.Maybe as Maybe
 
 -- | The type checking Monad includes a reader (for the
 -- environment), freshness state (for supporting locally-nameless
@@ -199,6 +201,25 @@ lookupConstructor name = do
             (_, (_, cstrs)) <- Unbound.unbind bnd
             return $ map (\(Constructor n _) -> n) cstrs
        in if name `elem` names then Just tc else Nothing
+
+lookupSmaller :: (MonadReader Env m) => Term -> TName -> m Bool
+lookupSmaller t n = do
+  ctx <- asks ctx
+  return $ Maybe.isNothing $ go ctx
+  where
+    -- Nothing means that the relation was validated
+    -- Note that since the environment is "backward" (i.e. the most recent
+    -- additions appear first), we must perform the lookup starting from the
+    -- end to ensure that the transitive closure is complete.
+    go :: [Entry] -> Maybe [TName]
+    go (Smaller t' n' : ctx) = do
+      rels <- go ctx
+      let exp =
+            [n' | aeq t t']
+              ++ concatMap (\n'' -> if aeq t' (Var n'') then [n'', n'] else [n'']) rels
+      if n `elem` exp then Nothing else Just exp
+    go (_ : ctx) = go ctx
+    go [] = Just []
 
 -- | Extend the context with a new entry
 extendCtx :: (MonadReader Env m) => Entry -> m a -> m a

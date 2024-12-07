@@ -24,6 +24,12 @@ import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
 -- Definition of tests to run
 --------------------------------------------------------------------------------
 
+anyErr :: String
+anyErr = ""
+
+unknownErr :: String
+unknownErr = "\\?\\?\\?"
+
 tests :: TestTree
 tests =
   let dataTests =
@@ -66,6 +72,14 @@ tests =
               ("Constructors are parametric on parameters", "ParamNotIndex", "first 2 argument.*should be P Q.*found t0 t1")
             ]
 
+      fixpointTests =
+        testGroup "Fixpoint" $
+          negativeTests
+            "test/Fix"
+            [ ("Straight recursion is disallowed", "Straight", "recursive.*u.*structurally smaller.*u"),
+              ("Constant recursion is disallowed", "Constant", "recursive.*unit.*structurally smaller.*u")
+            ]
+
       failingTests =
         testGroup
           "Failing"
@@ -76,13 +90,14 @@ tests =
               ("Wildcard is not a variable", "WildcardVar", "expecting a variable"),
               ("Missing variable in pattern", "InvalidPattern1", "Instantiation of constructor One.*u0 u1"), -- "too few variables.*\\(_:Unit\\)"
               ("Extra variable in pattern", "InvalidPattern2", "Instantiation of constructor One.*u0 u1 u3 u4"), -- "too many variables.*u4.*unused"
-              ("Dependent wildcard must not be confused", "DependentWildcardConfusion", "")
+              ("Dependent wildcard must not be confused", "DependentWildcardConfusion", anyErr)
             ]
    in testGroup
         "Tests"
         [ dataTests,
           matchingTests,
           positivityTests,
+          fixpointTests,
           universesTests,
           failingTests
         ]

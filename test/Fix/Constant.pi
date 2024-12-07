@@ -1,0 +1,9 @@
+module Constant where
+
+data Unit : Set :=
+  unit: Unit
+
+data Void: Set := {}
+
+inf : Unit -> Void
+inf = fix inf [u] . inf unit
