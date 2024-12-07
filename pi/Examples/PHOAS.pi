@@ -35,7 +35,7 @@ LTerm1 : Set
 LTerm1 = (V: Set) -> V -> LTerm_ V
 
 squash_ : (V: Set) -> LTerm_ (LTerm_ V) -> LTerm_ V
-squash_ = \V t . case t of
+squash_ = fix squash_ V [t] . case t of
   Cst -> Cst V
   Var e -> e
   Abs f -> Abs V (\x . squash_ V (f (Var V x)))
@@ -45,7 +45,7 @@ lsubst : LTerm1 -> LTerm -> LTerm
 lsubst = \f a V. squash_ V ((f (LTerm_ V)) (a V))
 
 cbvStep_ : (V: Set) -> LTerm_ (LTerm_ V) -> Maybe (LTerm_ (LTerm_ V))
-cbvStep_ = \V t . case t of
+cbvStep_ = fix cbvStep_ V [t] . case t of
   Cst -> Nothing (LTerm_ (LTerm_ V))
   Var _ -> Nothing (LTerm_ (LTerm_ V))
   Abs _ -> Nothing (LTerm_ (LTerm_ V))

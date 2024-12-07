@@ -102,6 +102,10 @@ data Term
     Contra Term
   | -- | pattern matching
     Case Term DestructionPredicate [Branch]
+  | -- | Fixpoint `fix f x. a`
+    Fix (Unbound.Bind (TName, [TName]) (Unbound.Bind TName Term))
+  | -- | Unapplied recursive term
+    Guarded TName Type
   deriving (Show, Generic)
 
 newtype DestructionPredicate = DestructionPredicate {getPredicate :: Unbound.Bind (Maybe TName, Maybe Pattern) (Maybe Type)}

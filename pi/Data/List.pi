@@ -8,19 +8,19 @@ data List (T: Set) : Set :=
   Cons (h: T) (t: List T) : List T
 
 nth : (S: Set) -> List S -> Nat -> Maybe S
-nth = \S ls n . case ls of
+nth = fix nth S [ls] . \ n . case ls of
   Nil -> Nothing S
   Cons h t -> case n of
-              Z -> Some S h
-              S n' -> nth S t n'
+            Z -> Some S h
+            S n' -> nth S t n'
 
 foldLeft : (U: Set) -> (S: Set) -> (S -> U -> S) -> S -> List U -> S
-foldLeft = \U S f s ts . case ts of
+foldLeft = fix foldLeft U S f s [ts] . case ts of
   Nil -> s
   Cons t ts' -> foldLeft U S f (f s t) ts'
 
 foldRight : (U: Set) -> (S: Set) -> (U -> S -> S) -> S -> List U -> S
-foldRight = \U S f s ts . case ts of
+foldRight = fix foldRight U S f s [ts] . case ts of
   Nil -> s
   Cons t ts' -> f t (foldRight U S f s ts')
 

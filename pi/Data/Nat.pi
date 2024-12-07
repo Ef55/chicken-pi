@@ -11,6 +11,6 @@ isZero = \n . case n of
   S _ -> False
 
 plus : Nat -> Nat -> Nat
-plus = \n m . case n of
+plus = fix plus [n]. \ m . case n of
   Z -> m
   S n' -> S (plus n' m)

@@ -350,6 +350,28 @@ checkType tm ty = do
           checkType body tyB
         return ()
       _ -> Env.err [DS "Lambda expression should have a function type, not", DD ty']
+
+    (Fix bnd) -> do
+      ((self, xs), bnd') <- Unbound.unbind bnd
+      (ctx, ty'') <- introBindings xs [] ty'
+      Env.extendCtxs (Decl (TypeDecl self ty') : ctx) $
+        case ty'' of
+          (TyPi tyA bnd2) -> do
+            -- unbind the variables in the lambda expression and pi type
+            (x, body, tyB) <- unbind2 bnd' bnd2
+            -- check the type of the body of the lambda expression
+            Env.extendCtx (Decl (TypeDecl x tyA)) (checkType body tyB)
+          _ -> Env.err [ DS "Found type", DD ty'', DS "while fix still has to introduce its last argument."]
+      where
+        introBindings :: [TName] -> [Entry] -> Type -> TcMonad ([Entry], Type)
+        introBindings [] acc r = return (reverse acc, r)
+        introBindings (b : bs) acc r =
+          case r of
+            (TyPi tyA bnd) -> do
+              r' <- Equal.whnf $ Unbound.instantiate bnd [Var b]
+              introBindings bs (Decl (TypeDecl b tyA) : acc) r'
+            _ -> Env.err [ DS "Found type", DD r, DS "while fix still has to introduce", DD b]
+
     -- Practicalities
     (Pos p a) ->
       Env.extendSourceLocation p a $ checkType a ty'
@@ -560,7 +582,7 @@ tcEntry (Def n term) = do
                     DD decl
                   ]
            in do
-                Env.extendCtx (Decl decl) $ checkType term (declType decl) `catchError` handler
+                checkType term (declType decl) `catchError` handler
                 return $ AddCtx [Decl decl, Def n term]
     die term' =
       Env.extendSourceLocation (unPosFlaky term) term $
