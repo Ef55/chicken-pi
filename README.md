@@ -21,7 +21,7 @@ Note that these should not necessarily be done in order.
    - [X] Sorts: `Prop`, `Set`, and `Type i`.
    - [X] Universe subtyping/cumulativity (see [subtyping rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#subtyping-rules)).
    - [X] Impredicative `Prop`.
-   - [ ] Ensure proof erasability (see [`Prod-*` rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#id6)).
+   - [X] Ensure proof erasability (see [`Prod-*` rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#id6)).
    - [ ] Empty/singleton elimination (see [`Prop-extended`](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html)).
 4. [Coq-style](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html)
    datatypes and pattern matching:
