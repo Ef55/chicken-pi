@@ -1,6 +1,8 @@
 {- pi-forall language -}
 
 -- | A parsec-based parser for the concrete syntax
+{-# HLINT ignore "Use <$>" #-}
+{-# HLINT ignore "Redundant return" #-}
 module Parser
   ( parseModuleFile,
     parseModuleImports,
@@ -109,7 +111,7 @@ parseModuleImports name = do
   contents <- liftIO $ readFile name
   liftError $
     Unbound.runFreshM $
-      (runParserT (do whiteSpace; moduleImports) [] name contents)
+      runParserT (do whiteSpace; moduleImports) [] name contents
 
 -- | Test an 'LParser' on a String.
 testParser :: LParser t -> String -> Either ParseError t
@@ -154,6 +156,9 @@ piforallStyle =
         [ "Refl",
           "ind",
           "Type",
+          "Prop",
+          "===",
+          "Set",
           "data",
           "where",
           "case",
@@ -350,7 +355,9 @@ funapp = do
 factor =
   choice
     [ Var <$> variable <?> "a variable",
-      typen <?> "Type",
+      typen <?> "Type with mandatory level",
+      prop <?> "Prop",
+      set <?> "Set",
       lambda <?> "a lambda",
       try letPairExp <?> "a let pair",
       letExpr <?> "a let",
@@ -361,20 +368,34 @@ factor =
       printme <?> "PRINTME",
       impProd <?> "an implicit function type",
       sigmaTy <?> "a sigma type",
-      expProdOrAnnotOrParens
-        <?> "an explicit function type or annotated expression"
+      expProdOrAnnotOrParens <?> "an explicit function type or annotated expression"
     ]
+
 
 impOrExpVar :: LParser (TName, Epsilon)
 impOrExpVar =
   try ((,Irr) <$> (brackets varOrWildcard))
     <|> (,Rel) <$> varOrWildcard
 
+integer :: LParser Integer
+integer = Token.integer tokenizer
+
+-- | Parser for 'Type' with a mandatory level, e.g., 'Type 0', 'Type 1', etc.
 typen :: LParser Term
-typen =
+typen = do
+  reserved "Type"                      -- Parse the keyword 'Type' and consume trailing space
+  TyType . LConst <$> integer          -- Parse the mandatory integer level and construct 'TyType'
+
+prop :: LParser Term
+prop =
   do
-    reserved "Type"
-    return TyType
+    reserved "Prop"
+    return $ TyType LProp
+
+set :: LParser Term
+set = do
+  reserved "Set"
+  return $ TyType LSet
 
 -- Lambda abstractions have the syntax '\x . e'
 lambda :: LParser Term
@@ -387,7 +408,6 @@ lambda = do
   where
     lam (x, ep) m = Lam ep (Unbound.bind x m)
 
---
 letExpr :: LParser Term
 letExpr =
   do
@@ -396,8 +416,7 @@ letExpr =
     reservedOp "="
     rhs <- expr
     reserved "in"
-    body <- expr
-    return $ Let rhs (Unbound.bind x body)
+    Let rhs . Unbound.bind x <$> expr
 
 letPairExp :: LParser Term
 letPairExp = do
@@ -410,8 +429,7 @@ letPairExp = do
   reservedOp "="
   scrut <- expr
   reserved "in"
-  a <- expr
-  return $ LetPair scrut (Unbound.bind (x, y) a)
+  LetPair scrut . Unbound.bind (x, y) <$> expr
 
 -- impProd - implicit dependent products
 -- These have the syntax [x:a] -> b or [a] -> b .
@@ -424,8 +442,7 @@ impProd =
             <|> ((,) <$> Unbound.fresh wildcardName <*> expr)
         )
     reservedOp "->"
-    tyB <- expr
-    return $ TyPi Irr tyA (Unbound.bind x tyB)
+    TyPi Irr tyA . Unbound.bind x <$> expr
 
 -- Pattern matching
 patternMatching :: LParser Term
@@ -448,8 +465,7 @@ patternMatching = do
     branch = do
       (constructor, bindings) <- simplePattern
       reservedOp "->"
-      body <- term
-      return $ Branch $ Unbound.bind (PatCon constructor bindings) body
+      Branch . Unbound.bind (PatCon constructor bindings) <$> term
 
 -- Function types have the syntax '(x:A) -> B'.  This production deals
 -- with the ambiguity caused because these types, annotations and

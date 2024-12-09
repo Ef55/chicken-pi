@@ -1,13 +1,13 @@
 module WrongInName where
 
-data P: Type :=
+data P: Set :=
   One: P
   Two (P) (P): P
 
-data D0 : Type :=
+data D0 : Set :=
   C0 (P) (P): D0
 
-data D1 : Type :=
+data D1 : Set :=
   C1 (P) (P): D1
 
 f : D0 -> P

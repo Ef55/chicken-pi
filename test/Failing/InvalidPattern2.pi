@@ -1,9 +1,9 @@
 module InvalidPattern where
 
-data Unit : Type :=
+data Unit : Type 1 :=
   unit: Unit
 
-data Data : Type :=
+data Data : Type 1 :=
   One (Unit) (Unit) (Unit): Data
 
 test : Data -> Unit

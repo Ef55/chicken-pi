@@ -1,6 +1,11 @@
 module Void where
 
-data Void : Type := {}
+data Void : Set := {}
 
-exfalso : (A: Type) -> Void -> A
-exfalso = \ A v . case v of {}
+-- Must be weaken because we don't have universe polymorphism
+
+exfalsoS : (A: Set) -> Void -> A
+exfalsoS = \ A v . case v of {}
+
+exfalsoP : (P: Prop) -> Void -> P
+exfalsoP = \ A v . case v of {}

@@ -1,4 +1,4 @@
 module NotFullyApplied where
 
-data NFA (S: Type) (T: Type) (U: Type): Type :=
+data NFA (S: Set) (T: Set) (U: Set): Set :=
   C : NFA S T

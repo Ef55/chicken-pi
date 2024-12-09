@@ -1,4 +1,4 @@
 module ArgOfArg where
 
-data T : Type :=
+data T : Set :=
   C (T -> T): T

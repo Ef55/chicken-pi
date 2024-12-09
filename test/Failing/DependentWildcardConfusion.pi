@@ -1,9 +1,9 @@
 module Dependent where
 
-data Data : Type :=
-  C (X: Type) (x: X) (Y: Type) (X -> Y): Data
+data Data : Type 1 :=
+C (X: Type) (x: X) (Y: Type) (X -> Y): Data
 
-Y : Data -> Type
+Y : Data -> Type 1
 Y = \d . case d of C _ _ y _ -> y
 
 f : (d: Data) -> Y d

@@ -46,6 +46,8 @@ tests =
               [ ("Type mentioned in return clause must match", "WrongInName", "'in' clause.*D1.*should be.*D0")
               ]
 
+      universesTests = testGroup "Universes" (tcFile ["test/Universes"] <$> [ "Hierarchy" ])
+
       positivityTests =
         testGroup
           "Positivity"
@@ -73,7 +75,7 @@ tests =
         [ dataTests,
           matchingTests,
           positivityTests,
-          -- universesTests,
+          universesTests,
           failingTests
         ]
 

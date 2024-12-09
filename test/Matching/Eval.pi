@@ -1,6 +1,6 @@
 module Eval where
 
-data Data: Type :=
+data Data: Set :=
   One : Data
   Two : Data
   Three : Data

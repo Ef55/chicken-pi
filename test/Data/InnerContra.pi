@@ -1,12 +1,12 @@
 module InnerContra where
 
-data Void: Type := {}
+data Void: Set := {}
 
-data D0: Type :=
+data D0: Set :=
   C00: D0
   C01: D0
   
-data D1: Type :=
+data D1: Set :=
   C10: D1
   C11 (D0) (D1): D1
   C12 (D0) (D1): D1

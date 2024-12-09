@@ -1,7 +1,7 @@
 module SelfNonUniform where
 
-data NU (T: Type) : Type :=
+data NU (T: Set) : Set :=
   C0 (NU (T -> T)): NU T
 
-data T : Type :=
+data T : Set :=
   C1 (NU T): T

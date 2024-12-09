@@ -1,6 +1,6 @@
 module UnorderedPatterns where
 
-data Data: Type :=
+data Data: Type 1 :=
   One : Data
   Two : Data
   Three : Data

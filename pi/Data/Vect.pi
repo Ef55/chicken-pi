@@ -2,23 +2,23 @@ module Vect where
 import Unit
 import Nat
 
-data Vect (T: Type) : Nat -> Type :=
+data Vect (T: Set) : Nat -> Set :=
   Nil : Vect T Z
   Cons (T) (n: Nat) (Vect T n) : Vect T (S n)
 
-concat : (T: Type) -> (n: Nat) -> Vect T n -> (m: Nat) -> Vect T m -> Vect T (plus n m)
+concat : (T: Set) -> (n: Nat) -> Vect T n -> (m: Nat) -> Vect T m -> Vect T (plus n m)
 concat = \ T n l m l' . case l in Vect _ n_ return Vect T (plus n_ m) of
   Nil -> l'
   Cons h n' t -> Cons T h (plus n' m) (concat T n' t m l')
 
-head : (T: Type) -> (n: Nat) -> Vect T (S n) -> T
+head : (T: Set) -> (n: Nat) -> Vect T (S n) -> T
 head = \ T n v .
-  let retType = ((
+  let retSet = ((
     \n . case n of
             Z -> Unit
             S _ -> T
-    ) : Nat -> Type)
+    ) : Nat -> Set)
   in
-  case v in Vect _ n_ return retType n_ of
+  case v in Vect _ n_ return retSet n_ of
     Nil -> unit
     Cons h _ _ -> h

@@ -1,6 +1,6 @@
 module MultiParams where
 
-data D (S: Type) (T: Type) (U: Type): Type :=
+data D (S: Set) (T: Set) (U: Set): Set :=
   C0 : D S T U
   C1 (D S T U): D S T U 
   C2 (S): D S T U 
