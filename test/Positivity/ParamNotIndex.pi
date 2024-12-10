@@ -1,0 +1,7 @@
+module ParamNotIndex where
+
+data t0 : Set := {}
+data t1 : Set := {}
+
+data T (P: Set) (Q: Set): Set :=
+  C : T t0 t1

@@ -1,0 +1,12 @@
+module Sigma where
+
+data Sigma (A: Set) (B: A -> Set): Set :=
+  Prod (a: A) (b: B a): Sigma A B
+
+fst : (A: Set) -> (B: A -> Set) -> Sigma A B -> A
+fst = \ A B s . case s of
+  Prod a _ -> a
+
+snd : (A: Set) -> (B: A -> Set) -> (s: Sigma A B) -> B (fst A B s)
+snd = \ A B s . case s as s_ return B (fst A B s_) of
+  Prod a b -> b

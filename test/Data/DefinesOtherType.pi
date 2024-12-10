@@ -1,0 +1,8 @@
+module DefinesOtherSet where
+
+data D0: Set := {}
+
+data D1: Set :=
+  C0: D1
+  C1: D0
+  C2: D1

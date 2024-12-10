@@ -1,0 +1,63 @@
+module Lambda where
+
+import Unit
+import Bool
+import Nat
+import Maybe
+import List
+
+-- Is is truly a programming language if no one implemented a Setchecker
+-- for the Simply Setd Lambda Calculus (STLC) in it?
+data LSet: Set :=
+  Ground: LSet
+  Arrow (LSet) (LSet): LSet
+
+-- Oh, and we will define the syntax using
+-- Parametric Higher-Order Abstract Syntax (PHOAS), following the presentation in
+-- << Chlipala, Adam. "Parametric higher-order abstract syntax for mechanized semantics." >>
+data LTerm_ (V: Set): Set :=
+  Cst: LTerm_ V
+  Var (V): LTerm_ V
+  Abs (V -> LTerm_ V): LTerm_ V
+  App (LTerm_ V) (LTerm_ V): LTerm_ V
+
+LTerm : Set
+LTerm = (V: Set) -> LTerm_ V
+
+isValue : LTerm -> Bool
+isValue = \t . case t Unit of
+  Cst -> True
+  Var _ -> False
+  Abs _ -> True
+  App _ _ -> False
+
+LTerm1 : Set
+LTerm1 = (V: Set) -> V -> LTerm_ V
+
+squash_ : (V: Set) -> LTerm_ (LTerm_ V) -> LTerm_ V
+squash_ = \V t . case t of
+  Cst -> Cst V
+  Var e -> e
+  Abs f -> Abs V (\x . squash_ V (f (Var V x)))
+  App l r -> App V (squash_ V l) (squash_ V r)
+
+lsubst : LTerm1 -> LTerm -> LTerm
+lsubst = \f a V. squash_ V ((f (LTerm_ V)) (a V))
+
+cbvStep_ : (V: Set) -> LTerm_ (LTerm_ V) -> Maybe (LTerm_ (LTerm_ V))
+cbvStep_ = \V t . case t of
+  Cst -> Nothing (LTerm_ (LTerm_ V))
+  Var _ -> Nothing (LTerm_ (LTerm_ V))
+  Abs _ -> Nothing (LTerm_ (LTerm_ V))
+  App l r -> case l of
+    Cst -> Nothing (LTerm_ (LTerm_ V))
+    Var _ -> Nothing (LTerm_ (LTerm_ V))
+    Abs f -> Some (LTerm_ (LTerm_ V)) (f (squash_ V r))
+    App l' r' ->
+      let T = LTerm_ V in
+      maybe_map (LTerm_ T) (LTerm_ T) (\l'' . App T (App T l'' r') r) (cbvStep_ V l')
+
+cbvStep : LTerm -> (V: Set) -> Maybe (LTerm_ V)
+cbvStep = \t V .
+  maybe_map (LTerm_ (LTerm_ V)) (LTerm_ V)
+    (\t . squash_ V t) (cbvStep_ V (t (LTerm_ V)))              

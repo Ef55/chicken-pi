@@ -1,0 +1,7 @@
+module Fun where
+
+fcomp :
+  (S: Set) -> (T: Set) -> (U: Set) ->
+  (S -> T) -> (T -> U) ->
+  S -> U
+fcomp = \_ _ _ f g s . g (f s)

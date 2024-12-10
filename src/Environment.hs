@@ -10,6 +10,7 @@ module Environment
     lookupTyMaybe,
     lookupDef,
     lookupHint,
+    lookupConstructor,
     lookupTypeConstructor,
     getCtx,
     getLocalCtx,
@@ -27,6 +28,7 @@ module Environment
     Err (..),
     withStage,
     checkStage,
+    freshWildcard,
   )
 where
 
@@ -37,20 +39,21 @@ import Control.Monad.Except
     runExceptT,
     unless,
   )
+import Control.Monad.Identity
+import Control.Monad.RWS (MonadWriter, tell)
 import Control.Monad.Reader
   ( MonadReader (local),
     ReaderT (runReaderT),
     asks,
   )
+import Control.Monad.Trans.Writer (WriterT (runWriterT))
+import Data.Kind (Type)
 import Data.Maybe (listToMaybe)
 import GHC.Base (Alternative ((<|>)))
 import PrettyPrint (D (..), Disp (..), Doc, SourcePos, render)
 import Syntax
 import Text.PrettyPrint.HughesPJ (nest, sep, text, vcat, ($$))
 import Unbound.Generics.LocallyNameless qualified as Unbound
-import Control.Monad.Identity
-import Control.Monad.Trans.Writer (WriterT (runWriterT))
-import Control.Monad.RWS (MonadWriter, tell)
 
 -- | The type checking Monad includes a reader (for the
 -- environment), freshness state (for supporting locally-nameless
@@ -68,7 +71,10 @@ runTcMonad env m =
       m3 = runExceptT m2
       m4 = runWriterT m3
       m5 = runIdentity m4
-  in m5
+   in m5
+
+freshWildcard :: TcMonad TName
+freshWildcard = Unbound.fresh (Unbound.string2Name "_")
 
 -- | Marked locations in the source code
 data SourceLocation where
@@ -130,18 +136,12 @@ lookupTyMaybe v = do
     go (Demote ep : ctx) = do
       r <- go ctx
       return $ demoteDecl ep <$> r
-    go (dat@(Data dt constructors) : ctx) = do
-      let r1 = testDecl dt
-      r2 <- go ctx
-      return $ r1 <|> r2
     go (_ : ctx) = go ctx
     go [] = return Nothing
 
     testDecl :: TypeDecl -> Maybe TypeDecl
     testDecl decl =
       if v == declName decl then Just decl else Nothing
-
-
 
 demoteDecl :: Epsilon -> TypeDecl -> TypeDecl
 demoteDecl ep s = s {declEp = min ep (declEp s)}
@@ -176,17 +176,37 @@ lookupDef v = do
 lookupTypeConstructor ::
   (MonadReader Env m) =>
   TName ->
-  m (Maybe (TypeDecl, [Constructor]))
+  m (Maybe TypeConstructor)
 lookupTypeConstructor name = do
   ctx <- asks ctx
   return $ go ctx
   where
-    go :: [Entry] -> Maybe (TypeDecl, [Constructor])
-    go ((Data typ cstrs) : ctx)
-      | name == declName typ = Just (typ, cstrs)
+    go :: [Entry] -> Maybe TypeConstructor
+    go ((Data tc) : ctx)
+      | name == typeName tc = Just tc
       | otherwise = go ctx
     go (_ : ctx) = go ctx
     go [] = Nothing
+
+lookupConstructor ::
+  (MonadReader Env m) =>
+  TName ->
+  m (Maybe TypeConstructor)
+lookupConstructor name = do
+  ctx <- asks ctx
+  return $ go ctx
+  where
+    go :: [Entry] -> Maybe TypeConstructor
+    go ((Data tc) : ctx) = checkConstructors tc <|> go ctx
+    go (_ : ctx) = go ctx
+    go [] = Nothing
+
+    checkConstructors :: TypeConstructor -> Maybe TypeConstructor
+    checkConstructors tc@(TypeConstructor _ bnd) =
+      let names = Unbound.runFreshM $ do
+            (_, (_, cstrs)) <- Unbound.unbind bnd
+            return $ map (\(Constructor n _) -> n) cstrs
+       in if name `elem` names then Just tc else Nothing
 
 -- | Extend the context with a new entry
 extendCtx :: (MonadReader Env m) => Entry -> m a -> m a

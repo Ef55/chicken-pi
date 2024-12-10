@@ -1,11 +1,11 @@
 module Wildcard where
 
-data Data : Type 1 :=
+data Data : Set :=
   One : Data
   Two : Data
   Three : Data
 
-data Data' : Type 1 :=
+data Data' : Set :=
   A (Data) (Data) (Data): Data'
   B (Data) (Data') (Data): Data'
   C (Data'): Data'

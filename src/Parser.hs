@@ -15,7 +15,7 @@ where
 
 import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.State.Lazy hiding (join)
-import Data.List (foldl')
+import Data.List (foldl', intercalate)
 import LayoutToken qualified as Token
 import Syntax hiding (moduleImports)
 import Text.Parsec hiding (Empty, State)
@@ -170,6 +170,7 @@ piforallStyle =
           "by",
           "let",
           "in",
+          "as",
           "axiom",
           "TRUSTME",
           "PRINTME",
@@ -180,7 +181,7 @@ piforallStyle =
           "()"
         ],
       Token.reservedOpNames =
-        ["!", "?", "\\", ":", ".", ",", "<", "=", "+", "-", "*", "^", "()", "_", "|", "{", "}", ":="]
+        ["!", "?", "\\", ":", ".", ",", "<", "=", "+", "-", "*", "^", "()", "_", "|", "{", "}", ":=", "/"]
     }
 
 tokenizer :: Token.GenTokenParser String [Column] (Unbound.FreshM)
@@ -240,7 +241,7 @@ moduleDef = do
 importDef :: LParser ModuleImport
 importDef = do reserved "import" >> (ModuleImport <$> importName)
   where
-    importName = identifier
+    importName = intercalate "/" <$> sepBy1 identifier (reservedOp "/")
 
 ---
 --- Top level declarations
@@ -258,16 +259,13 @@ valDef = do
   return $ Def n val
 dataDef = do
   try (reserved "data")
-  (tName, tType) <-
-    ( do
-        n <- variable
-        colon
-        t <- expr
-        reservedOp ":="
-        return (n, t)
-      )
+  tName <- variable
+  params <- telescope
+  colon
+  s <- expr
+  reservedOp ":="
   constructors <- layout constructorDef (return ())
-  return $ Data (TypeDecl tName Rel tType) constructors
+  return $ Data $ TypeConstructor tName (Unbound.bind params (s, constructors))
   where
     constructorDef = do
       name <- variable
@@ -451,14 +449,21 @@ patternMatching :: LParser Term
 patternMatching = do
   reserved "case"
   scrutinee <- term
-  ret <- Just <$> try (reserved "return" >> term) <|> pure Nothing
+  asClause <- option Nothing $ try (Just <$> (reserved "as" >> variable))
+  inClause <- option Nothing $ try (Just . uncurry PatCon <$> (reserved "in" >> simplePattern))
+  retClause <- option Nothing $ try (Just <$> (reserved "return" >> term))
   reserved "of"
   branches <- layout branch (return ())
-  return $ Case scrutinee ret branches
+  let predicate = DestructionPredicate $ Unbound.bind (asClause, inClause) retClause
+  return $ Case scrutinee predicate branches
   where
-    branch = do
+    simplePattern = do
       constructor <- identifier
       bindings <- many varOrWildcard
+      return (constructor, bindings)
+
+    branch = do
+      (constructor, bindings) <- simplePattern
       reservedOp "->"
       Branch . Unbound.bind (PatCon constructor bindings) <$> term
 

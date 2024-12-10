@@ -1,0 +1,22 @@
+module HList where
+
+data List1 (T: Type 1) : Type 2 :=
+  Nil1 : List1 T
+  Cons1 (h: T) (t: List1 T) : List1 T
+
+concat : (T: Type 1) -> List1 T -> List1 T -> List1 T
+concat = \T l r . case l of 
+  Nil1 -> r
+  Cons1 h t -> Cons1 T h (concat T t r)
+
+data HList: List1 Set -> Set :=
+  HNil : HList (Nil1 Set)
+  HCons (T: Set) (T) (Ts: List1 Set) (HList Ts): HList (Cons1 Set T Ts)
+
+hconcat :
+  (Ls: List1 Set) -> (Rs: List1 Set) ->
+  (l: HList Ls) -> (r: HList Rs) -> 
+  HList (concat Set Ls Rs)
+hconcat = \Ls Rs l r . case l in HList Ls_ return HList (concat Set Ls_ Rs) of
+  HNil -> r
+  HCons HL hl Ls' l' -> HCons HL hl (concat Set Ls' Rs) (hconcat Ls' Rs l' r)

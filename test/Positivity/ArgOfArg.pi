@@ -1,0 +1,4 @@
+module ArgOfArg where
+
+data T : Set :=
+  C (T -> T): T
