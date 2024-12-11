@@ -57,17 +57,13 @@ equate t1 t2 = do
     (TyType l1, TyType l2) -> do
       equateLevels l1 l2
     (Var x, Var y) | x == y -> return ()
-    (Lam ep1 bnd1, Lam ep2 bnd2) -> do
+    (Lam bnd1, Lam bnd2) -> do
       (_, b1, b2) <- unbind2 bnd1 bnd2
-      unless (ep1 == ep2) $
-        tyErr n1 n2
       equate b1 b2
     (App a1 a2, App b1 b2) ->
-      equate a1 b1 >> equateArg a2 b2
-    (TyPi ep1 tyA1 bnd1, TyPi ep2 tyA2 bnd2) -> do
+      equate a1 b1 >> equate a2 b2
+    (TyPi tyA1 bnd1, TyPi tyA2 bnd2) -> do
       (_, tyB1, tyB2) <- unbind2 bnd1 bnd2
-      unless (ep1 == ep2) $
-        tyErr n1 n2
       equate tyA1 tyA2
       equate tyB1 tyB2
     (TrustMe, TrustMe) -> return ()
@@ -122,36 +118,6 @@ equate t1 t2 = do
           DD gamma
         ]
 
--- | Match up args
-equateArgs :: [Arg] -> [Arg] -> TcMonad ()
-equateArgs (a1 : t1s) (a2 : t2s) = do
-  equateArg a1 a2
-  equateArgs t1s t2s
-equateArgs [] [] = return ()
-equateArgs a1 a2 = do
-  gamma <- Env.getLocalCtx
-  Env.err
-    [ DS "Expected",
-      DD (length a2),
-      DS "but found",
-      DD (length a1),
-      DS "in context:",
-      DD gamma
-    ]
-
--- | Ignore irrelevant arguments when comparing
-equateArg :: Arg -> Arg -> TcMonad ()
-equateArg (Arg Rel t1) (Arg Rel t2) = equate t1 t2
-equateArg (Arg Irr t1) (Arg Irr t2) = return ()
-equateArg a1 a2 =
-  Env.err
-    [ DS "Arg stage mismatch",
-      DS "Expected ",
-      DD a2,
-      DS "Found ",
-      DD a1
-    ]
-
 -------------------------------------------------------
 
 -------------------------------------------------------
@@ -166,8 +132,8 @@ whnf (Var x) = do
 whnf (App t1 t2) = do
   nf <- whnf t1
   case nf of
-    (Lam ep bnd) -> do
-      whnf (instantiate bnd (unArg t2))
+    (Lam bnd) -> do
+      whnf (instantiate bnd t2)
     _ -> do
       return (App nf t2)
 whnf (LetPair a bnd) = do
@@ -237,17 +203,13 @@ unify ns tx ty = do
       (Var x, Var y) | x == y -> return []
       (Var y, yty) | y `notElem` ns -> return [Def y yty]
       (yty, Var y) | y `notElem` ns -> return [Def y yty]
-      (Prod a1 a2, Prod b1 b2) -> unifyArgs [Arg Rel a1, Arg Rel a2] [Arg Rel b1, Arg Rel b2]
+      (Prod a1 a2, Prod b1 b2) -> unifyArgs [a1, a2] [b1, b2]
       (TyEq a1 a2, TyEq b1 b2) -> (++) <$> unify ns a1 b1 <*> unify ns a2 b2
-      (Lam ep1 bnd1, Lam ep2 bnd2) -> do
+      (Lam bnd1, Lam bnd2) -> do
         (x, b1, b2) <- unbind2 bnd1 bnd2
-        unless (ep1 == ep2) $ do
-          Env.err [DS "Cannot equate", DD txnf, DS "and", DD tynf]
         unify (x : ns) b1 b2
-      (TyPi ep1 tyA1 bnd1, TyPi ep2 tyA2 bnd2) -> do
+      (TyPi tyA1 bnd1, TyPi tyA2 bnd2) -> do
         (x, tyB1, tyB2) <- unbind2 bnd1 bnd2
-        unless (ep1 == ep2) $ do
-          Env.err [DS "Cannot equate", DD txnf, DS "and", DD tynf]
         ds1 <- unify ns tyA1 tyA2
         ds2 <- unify (x : ns) tyB1 tyB2
         return (ds1 ++ ds2)
@@ -256,7 +218,7 @@ unify ns tx ty = do
           then return []
           else Env.err [DS "Cannot equate", DD txnf, DS "and", DD tynf]
   where
-    unifyArgs (Arg _ t1 : a1s) (Arg _ t2 : a2s) = do
+    unifyArgs (t1 : a1s) (t2 : a2s) = do
       ds <- unify ns t1 t2
       ds' <- unifyArgs a1s a2s
       return $ ds ++ ds'
@@ -284,7 +246,7 @@ maybeUnconstruct term0 = iter (strip term0) []
   where
     iter :: Term -> [Term] -> Maybe (TName, [Term])
     iter term acc = case term of
-      App l (Arg _ r) -> iter l (r : acc)
+      App l r -> iter l (r : acc)
       (Var name) -> return (name, acc)
       _ -> Nothing
 
@@ -302,11 +264,11 @@ unconstruct term = case maybeUnconstruct term of
 
 maybeInstantiateConstructorType :: TName -> [Term] -> TcMonad (Maybe [Term])
 maybeInstantiateConstructorType cstrName args = do
-  (TypeDecl _ _ typ) <- Env.lookupTy cstrName
+  (TypeDecl _ typ) <- Env.lookupTy cstrName
   let app =
         foldM
           ( \f a -> case f of
-              TyPi _ _ bnd -> return $ Unbound.instantiate bnd [a]
+              TyPi _ bnd -> return $ Unbound.instantiate bnd [a]
               _ -> Nothing
           )
           typ

@@ -45,18 +45,17 @@ inferType :: Term -> TcMonad Type
 inferType a = case a of
   -- i-var
   (Var x) -> do
-    decl <- Env.lookupTy x -- make sure the variable is accessible
-    Env.checkStage (declEp decl)
+    decl <- Env.lookupTy x
     return (declType decl)
 
   -- i-type -- Type l : Type (l + 1)
   TyType l -> return (TyType (levelAdd l 1))
   -- i-pi
 
-  (TyPi ep tyA bnd) -> do
+  (TyPi tyA bnd) -> do
     (x, tyB) <- unbind bnd
     l1 <- tcType tyA -- Ensure tyA is a valid type and get its level
-    Env.extendCtx (Decl (TypeDecl x ep tyA)) $ do
+    Env.extendCtx (Decl (TypeDecl x tyA)) $ do
       tyB' <- Equal.whnf tyB
       l2 <- tcType tyB'
       let l = case (l1, l2) of
@@ -73,18 +72,9 @@ inferType a = case a of
     ty1 <- inferType a
     ty1' <- Equal.whnf ty1
     case ty1' of
-      (TyPi ep1 tyA bnd) -> do
-        unless (ep1 <= argEp b) $
-          Env.err
-            [ DS "In application, expected",
-              DD ep1,
-              DS "argument but found",
-              DD b,
-              DS "instead."
-            ]
-        -- If the argument is Irrelevant, adjust the context
-        (if ep1 == Irr then Env.extendCtx (Demote Rel) else id) $ checkType (unArg b) tyA
-        return (instantiate bnd (unArg b))
+      (TyPi tyA bnd) -> do
+        checkType b tyA
+        return (instantiate bnd b)
       _ -> Env.err [DS "Expected a function type but found", DD a, DS "of type", DD ty1]
 
   -- i-ann
@@ -239,13 +229,13 @@ checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch bran
 
   let cstrVars = Var <$> xs
       cstrArgs = typeParams ++ cstrVars
-      scrut = foldl App (Var cstrName) (Arg Rel <$> cstrArgs)
+      scrut = foldl App (Var cstrName) cstrArgs
   typeArgs <- Equal.instantiateConstructorType cstrName cstrArgs
   ret <- instantiateDestructionPredicate scrut typeArgs retPred
 
   -- Retrieve the type of the bindings in the telescope
   (telescope, _) <- instantiateTelescope cstrType cstrVars
-  let entries = zipWith (\x t -> Decl $ TypeDecl x Rel t) xs telescope
+  let entries = zipWith (\x t -> Decl $ TypeDecl x t) xs telescope
 
   when (length telescope /= length xs) $
     Env.err
@@ -260,10 +250,9 @@ checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch bran
 
 -- | Make sure that the term is a "type" (i.e. that it has type 'Type')
 tcType :: Term -> TcMonad Level
-tcType tm = Env.withStage Irr $ do
+tcType tm = do
   ty <- inferType tm
   ty' <- Equal.whnf ty
-
   case ty' of
     TyType LProp -> return LProp
     TyType LSet -> return LSet
@@ -283,7 +272,7 @@ arityOf t = iter [] t
   where
     iter acc t =
       Equal.whnf t >>= \t' -> case t' of
-        TyPi rel xType bnd -> do
+        TyPi xType bnd -> do
           (x, body) <- Unbound.unbind bnd
           iter ((x, xType) : acc) body
         _ -> return (reverse acc, t)
@@ -308,23 +297,12 @@ checkType tm ty = do
   ty' <- Equal.whnf ty
   case tm of
     -- c-lam: check the type of a function
-    (Lam ep1 bnd) -> case ty' of
-      (TyPi ep2 tyA bnd2) -> do
+    (Lam bnd) -> case ty' of
+      (TyPi tyA bnd2) -> do
         -- unbind variables and check the body
         (x, body, tyB) <- unbind2 bnd bnd2
-        -- check that ep1 == ep2
-        unless (ep1 == ep2) $
-          Env.err
-            [ DS "In function definition, expected",
-              DD ep2,
-              DS "parameter",
-              DD x,
-              DS "but found",
-              DD ep1,
-              DS "instead."
-            ]
         l1 <- tcType tyA
-        Env.extendCtx (Decl (TypeDecl x ep1 tyA)) $ do
+        Env.extendCtx (Decl (TypeDecl x tyA)) $ do
           l2 <- tcType tyB 
           let l = case (l1, l2) of
                 (_, LProp) -> LProp
@@ -544,7 +522,7 @@ tcEntry (Def n term) = do
       case lkup of
         Nothing -> do
           ty <- inferType term
-          return $ AddCtx [Decl (TypeDecl n Rel ty), Def n term]
+          return $ AddCtx [Decl (TypeDecl n ty), Def n term]
         Just decl ->
           let handler (Env.Err ps msg) = throwError $ Env.Err ps (msg $$ msg')
               msg' =
@@ -569,11 +547,10 @@ tcEntry (Decl decl) = do
   duplicateTypeBindingCheck decl
   u <- tcType (declType decl)
   return $ AddHint decl
-tcEntry (Demote ep) = return (AddCtx [Demote ep])
 tcEntry dat@(Data (TypeConstructor typ pack)) = do
   -- Unpacking
   (params, (arity, constructors)) <- Unbound.unbind pack
-  let td = TypeDecl typ Rel (telescopeToPi params arity)
+  let td = TypeDecl typ (telescopeToPi params arity)
 
   -- Typecheck the type definition
   _ <- tcType (declType td)
@@ -639,13 +616,13 @@ tcConstructor typeTelescope (dataTypeName, sort) (Constructor name cstrType) = d
   -- Check the positivity condition
   checkPositivity False dataTypeName fullType
 
-  return $ TypeDecl name Rel fullType
+  return $ TypeDecl name fullType
   where
     checkPositivity :: Bool -> TName -> Term -> TcMonad ()
     checkPositivity strict v t = do
       t' <- Equal.whnf t
       case t' of
-        (TyPi _ boundType bnd) -> do
+        (TyPi boundType bnd) -> do
           (_, r) <- Unbound.unbind bnd
           if strict
             then

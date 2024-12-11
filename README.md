@@ -9,7 +9,7 @@ This roadmap indicates the status of the project.
 Note that these should not necessarily be done in order.
 
 1. Removals from pi-forall:
-   - [ ] Remove (syntax) for irrelevant arguments.
+   - [X] Remove support for irrelevant arguments.
    - [ ] Prevent recursive functions.
 2. "Dirt simple" (no parameters/indices) datatypes (see [oplss notes](https://github.com/sweirich/pi-forall/blob/2023/doc/oplss.pdf) chapter 9):
    - [X] Definition.

@@ -70,11 +70,11 @@ data Term
   | -- | variable `x`
     Var TName
   | -- | abstraction  `\x. a`
-    Lam Epsilon (Unbound.Bind TName Term)
+    Lam (Unbound.Bind TName Term)
   | -- | application `a b`
-    App Term Arg
+    App Term Term
   | -- | function type   `(x : A) -> B`
-    TyPi Epsilon Type (Unbound.Bind TName Type)
+    TyPi Type (Unbound.Bind TName Type)
   | -- | annotated terms `( a : A )`
     Ann Term Type
   | -- | marked source position, for error messages
@@ -112,29 +112,9 @@ newtype Branch = Branch {getBranch :: Unbound.Bind Pattern Term}
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
--- | An argument to a function
-data Arg = Arg {argEp :: Epsilon, unArg :: Term}
-  deriving (Show, Generic, Unbound.Alpha, Unbound.Subst Term)
-
 data Pattern
   = PatCon String [TName]
   deriving (Show, Eq, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
-
--- | Epsilon annotates the stage of a variable
-data Epsilon
-  = Rel
-  | Irr
-  deriving
-    ( Eq,
-      Show,
-      Read,
-      Bounded,
-      Enum,
-      Ord,
-      Generic,
-      Unbound.Alpha,
-      Unbound.Subst Term
-    )
 
 -----------------------------------------
 
@@ -160,12 +140,12 @@ newtype ModuleImport = ModuleImport ModuleName
   deriving anyclass (Unbound.Alpha)
 
 -- | A type declaration
-data TypeDecl = TypeDecl {declName :: TName, declEp :: Epsilon, declType :: Type}
+data TypeDecl = TypeDecl {declName :: TName, declType :: Type}
   deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 -- | Declare the type of a term
 mkDecl :: TName -> Type -> Entry
-mkDecl n ty = Decl (TypeDecl n Rel ty)
+mkDecl n ty = Decl (TypeDecl n ty)
 
 -- | A list of parameters of datatype/constructor
 data Telescope
@@ -188,8 +168,6 @@ data Entry
   | -- | The definition of a particular name 'x = a'
     -- must already have a type declaration in scope
     Def TName Term
-  | -- | Adjust the context for relevance checking
-    Demote Epsilon
   | -- | The definition of a datatype
     Data TypeConstructor
   deriving (Show, Generic, Typeable)
@@ -282,7 +260,7 @@ telescopeToPi t r = iter t
     iter (Tele bnd) = do
       let ((x, Unbound.Embed xType), t') = Unbound.unrebind bnd
           b = iter t'
-       in TyPi Rel xType (Unbound.bind x b)
+       in TyPi xType (Unbound.bind x b)
 
 instantiateTelescope :: (Unbound.Fresh m, Unbound.Alpha a, Unbound.Subst Term a) => Unbound.Bind Telescope a -> [Term] -> m ([Type], a)
 instantiateTelescope bnd args = do
@@ -336,11 +314,11 @@ yName = Unbound.string2Name "y"
 
 -- '\x -> x`
 idx :: Term
-idx = Lam Rel (Unbound.bind xName (Var xName))
+idx = Lam (Unbound.bind xName (Var xName))
 
 -- '\y -> y`
 idy :: Term
-idy = Lam Rel (Unbound.bind yName (Var yName))
+idy = Lam (Unbound.bind yName (Var yName))
 
 -- >>> aeq idx idy
 
