@@ -1,0 +1,10 @@
+module InvalidHierarchy2
+
+someType3 : Type 2
+someType3 = Type 1
+
+eqEx : Prop
+eqEx = someType0 = someType3
+
+impredSigma : Type 1
+impredSigma = { x : someType0 | eqEx }

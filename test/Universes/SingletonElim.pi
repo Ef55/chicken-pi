@@ -1,0 +1,25 @@
+module SingletonElim where
+
+-- Define an empty type in Prop
+data False : Prop := {}
+
+-- Define a singleton type in Prop
+data True : Prop :=
+  Truth : True
+
+data Set1 : Set :=
+  elt1 : Set1
+  elt2 : Set1
+
+-- Empty elimination into Set
+emptyToSet : False -> Set
+emptyToSet = \f . case f of {}
+
+-- Singleton elimination into Set
+singletonToSet : True -> Set
+singletonToSet = \u . case u of
+  Truth -> Set1
+
+-- Empty elimination into a dependent type (Type level)
+emptyToDependent : False -> (A: Type 1) -> A
+emptyToDependent = \f . case f of {}

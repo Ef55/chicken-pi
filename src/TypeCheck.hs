@@ -1,6 +1,7 @@
 {- pi-forall -}
 
 {-# HLINT ignore "Use forM_" #-}
+{-# HLINT ignore "Use lambda-case" #-}
 
 -- | The main routines for type-checking
 module TypeCheck (tcModules, inferType, checkType) where
@@ -113,6 +114,13 @@ inferType a = case a of
     Env.err [DS "Must have a type annotation for", DD a]
 
 -------------------------------------------------------------------------
+isEmptyOrSingleton :: TypeConstructor -> TcMonad Bool
+isEmptyOrSingleton (TypeConstructor _ pack) = do
+  (_, (_, constructors)) <- Unbound.unbind pack
+  return $ case constructors of
+    [] -> True  -- Empty type
+    [_] -> True -- Singleton type
+    _ -> False  -- More than one constructor
 
 checkCase :: Term -> DestructionPredicate -> [Branch] -> Maybe Type -> TcMonad Type
 checkCase scrut pred branches mRet = do
@@ -123,16 +131,24 @@ checkCase scrut pred branches mRet = do
 instantiateDestructionPredicate :: Term -> [Type] -> Unbound.Bind (TName, Pattern) Type -> TcMonad Type
 instantiateDestructionPredicate scrut typeArgs pred = do
   ((sVar, PatCon _ typeArgVars), res) <- Unbound.unbind pred
-  when (length typeArgVars /= length typeArgs) $
-    Env.err
-      [ DS "Internal error: instantiateDestructionPredicate.",
-        DS "Vars:",
-        DL $ DD <$> typeArgVars,
-        DS "Args:",
-        DL $ DD <$> typeArgs
-      ]
-  return $ Unbound.substs ((sVar, scrut) : zip typeArgVars typeArgs) res
-
+  scrutType <- inferType scrut
+  scrutType' <- Equal.whnf scrutType
+  case scrutType' of
+    TyType _ -> do
+      -- If scrutinee is a sort, destruct into a function
+      let newRes = TyPi scrutType (Unbound.bind sVar res)
+      return $ Unbound.substs ((sVar, scrut) : zip typeArgVars typeArgs) newRes
+    _ -> do
+      -- Original case for non-sort types
+      when (length typeArgVars /= length typeArgs) $
+        Env.err
+          [ DS "Internal error: instantiateDestructionPredicate.",
+            DS "Vars:",
+            DL $ DD <$> typeArgVars,
+            DS "Args:",
+            DL $ DD <$> typeArgs
+          ]
+      return $ Unbound.substs ((sVar, scrut) : zip typeArgVars typeArgs) res
 checkScrutinee ::
   Term ->
   DestructionPredicate ->
@@ -144,57 +160,113 @@ checkScrutinee s p@(DestructionPredicate bPred) mExp = do
 
   -- Check scrutinee and extract information about its type
   sType <- inferType s
-  (typeCstrName, typeArgs) <- Equal.unconstruct sType
-  tcLookup <- Env.lookupTypeConstructor typeCstrName
-  typeDecl <- case tcLookup of
-    Just tcDecl -> return tcDecl
-    Nothing ->
-      Env.err
-        [ DS "The scrutinee in",
-          DD dummy,
-          DS "has type",
-          DD sType,
-          DS "which is not a datatype."
-        ]
-  (typeParams, _) <- splitParamsIndices typeDecl typeArgs
+  sType' <- Equal.whnf sType
+  case sType' of
+    TyPi tyA bnd -> do
+      -- Handle dependent destruction: apply destruction under the binder
+      (x, bodyType) <- Unbound.unbind bnd
+      (typeDecl, typeParams, pred, ret) <- checkScrutinee (App s (Var x)) p mExp
+      return (typeDecl, typeParams, pred, TyPi tyA (Unbound.bind x ret))
 
-  -- Generate a full destruction predicate
-  ((asBind, inBind), mRet) <- Unbound.unbind bPred
-  asBind' <- maybe Env.freshWildcard return asBind
-  inBind' <- maybe (generatePattern typeCstrName typeArgs) return inBind
-  paraRet <- case (mRet, mExp) of
-    (Just ret, _) -> return ret
-    (_, Just ret) -> return ret
-    (Nothing, Nothing) ->
-      Env.err
-        [ DS "Cannot infer return type of case expression",
-          DD dummy
-        ]
-  let pred = Unbound.bind (asBind', inBind') paraRet
+    TySigma tyA bnd -> do
+      (x, bodyType) <- Unbound.unbind bnd
+      (typeDecl, typeParams, pred, ret) <- checkScrutinee (App s (Var x)) p mExp
+      return (typeDecl, typeParams, pred, TySigma tyA (Unbound.bind x ret))
 
-  -- Check expected type against destruction predicate
-  ret <- instantiateDestructionPredicate s typeArgs pred
-  case mExp of
-    Nothing -> return ()
-    Just exp -> Equal.equate exp ret
+    TyType LProp -> do
+      -- First, try to unconstruct sType to see if it actually represents a datatype
+      case Equal.maybeUnconstruct sType of
+        Nothing ->
+          -- If we can't unconstruct it, it's just a bare Prop, not a datatype
+          Env.err [DS "Cannot eliminate bare `Prop` sort, it's not a datatype."]
+        Just (typeCstrName, typeArgs) -> do
+          tcLookup <- Env.lookupTypeConstructor typeCstrName
+          case tcLookup of
+            Just typeDecl -> do
+              -- Check if it's empty or singleton
+              isSpecial <- isEmptyOrSingleton typeDecl
+              if isSpecial
+                then do
+                  -- Allow elimination into any sort
+                  let newRet = fromMaybe (TyType LSet) mExp
+                  -- Transform `bPred` into a fully-specified predicate
+                  ((maybeAsBind, maybeInBind), maybeRet) <- Unbound.unbind bPred
+                  asBind <- maybe Env.freshWildcard return maybeAsBind
+                  inBind <- maybe (generatePattern typeCstrName typeArgs) return maybeInBind
+                  ret <- case (maybeRet, mExp) of
+                    (Just ret, _) -> return ret
+                    (_, Just ret) -> return ret
+                    (Nothing, Nothing) ->
+                      Env.err
+                        [ DS "Cannot infer return type of case expression",
+                          DD dummy
+                        ]
 
-  -- Check that the "decoration" at the start of the in clause
-  -- matches the type being destructed.
-  case inBind' of
-    PatCon name _ ->
-      unless (string2Name name == typeCstrName) $
-        Env.err
-          [ DS "The type mentioned in the 'in' clause",
-            DD inBind',
-            DS "should be headed by",
-            DD typeCstrName,
-            DS "because that's the type of the scrutinee."
-          ]
+                  let pred = Unbound.bind (asBind, inBind) ret
+                  return (typeDecl, typeArgs, pred, newRet)
+                else
+                  Env.err
+                    [ DS "Cannot eliminate",
+                      DD sType,
+                      DS "into a non-Prop sort unless it is empty or singleton."
+                    ]
+            Nothing -> Env.err [DS "Could not find type constructor for", DD typeCstrName]
 
-  return (typeDecl, typeParams, pred, ret)
+    _ -> do
+      -- Handle non-dependent and non-Prop cases
+      (typeCstrName, typeArgs) <- Equal.unconstruct sType
+      tcLookup <- Env.lookupTypeConstructor typeCstrName
+      typeDecl <- case tcLookup of
+        Just tcDecl -> return tcDecl
+        Nothing ->
+          Env.err
+            [ DS "The scrutinee in",
+              DD dummy,
+              DS "has type",
+              DD sType,
+              DS "which is not a datatype."
+            ]
+
+      (typeParams, _) <- splitParamsIndices typeDecl typeArgs
+
+      -- Generate a full destruction predicate
+      ((asBind, inBind), mRet) <- Unbound.unbind bPred
+      asBind' <- maybe Env.freshWildcard return asBind
+      inBind' <- maybe (generatePattern typeCstrName typeArgs) return inBind
+      paraRet <- case (mRet, mExp) of
+        (Just ret, _) -> return ret
+        (_, Just ret) -> return ret
+        (Nothing, Nothing) ->
+          Env.err
+            [ DS "Cannot infer return type of case expression",
+              DD dummy
+            ]
+      let pred = Unbound.bind (asBind', inBind') paraRet
+
+      -- Check expected type against destruction predicate
+      ret <- instantiateDestructionPredicate s typeArgs pred
+      case mExp of
+        Nothing -> return ()
+        Just exp -> Equal.equate exp ret
+
+      -- Check that the "decoration" at the start of the in clause
+      -- matches the type being destructed.
+      case inBind' of
+        PatCon name _ ->
+          unless (string2Name name == typeCstrName) $
+            Env.err
+              [ DS "The type mentioned in the 'in' clause",
+                DD inBind',
+                DS "should be headed by",
+                DD typeCstrName,
+                DS "because that's the type of the scrutinee."
+              ]
+
+      return (typeDecl, typeParams, pred, ret)
   where
     generatePattern :: TName -> [Type] -> TcMonad Pattern
-    generatePattern typeCstrName typeArgs = PatCon (Unbound.name2String typeCstrName) <$> mapM (const Env.freshWildcard) typeArgs
+    generatePattern typeCstrName typeArgs =
+      PatCon (Unbound.name2String typeCstrName) <$> mapM (const Env.freshWildcard) typeArgs
 
     splitParamsIndices :: TypeConstructor -> [Type] -> TcMonad ([Type], [Type])
     splitParamsIndices (TypeConstructor _ pack) args = do
@@ -202,6 +274,7 @@ checkScrutinee s p@(DestructionPredicate bPred) mExp = do
       let params :: [TName] = Unbound.toListOf Unbound.fv telescope
           paramCount = length params
       return $ splitAt paramCount args
+
 
 checkMatch :: Unbound.Bind (TName, Pattern) Type -> TypeConstructor -> [Type] -> [Branch] -> TcMonad ()
 checkMatch ret (TypeConstructor typeName pack) typeParams branches = do
@@ -244,7 +317,14 @@ checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch bran
         DS "does not bind the correct number of variables for constructor",
         DD cstr
       ]
-  Env.extendCtxs entries $ checkType body ret
+
+  Env.extendCtxs entries $ do
+    -- Infer the type of the body
+    bodyType <- inferType body
+    -- Enforce that the body type matches the expected type
+    Equal.equate bodyType ret
+    -- Continue to type check the body against ret
+    checkType body ret
 
 -------------------------------------------------------------------------
 
