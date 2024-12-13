@@ -8,13 +8,13 @@ data Nat : Set :=
 -- Define the Even predicate on Nat in Prop with multiple constructors
 data Even : Nat -> Prop :=
   EvenZero : Even Zero
-  EvenSuccSucc : Even n -> Even (Succ (Succ n))
+  EvenSuccSucc (n: Nat) (Even n): Even (Succ (Succ n))
 
 data Set1 : Set :=
   elt1 : Set1
   elt2 : Set1
 
-invalidElimEvenToSet : Even n -> Set
-invalidElimEvenToSet = \ev . case ev of
-  EvenZero -> Set1       -- Should fail
-  EvenSuccSucc n' -> Set1 -- Should fail
+invalidElimEvenToSet: (n: Nat) -> Even n -> Set1
+invalidElimEvenToSet = \m ev . case ev of
+  EvenZero -> elt1        -- Should fail
+  EvenSuccSucc m' ev' -> elt2 -- Should fail

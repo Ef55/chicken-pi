@@ -25,17 +25,17 @@ import Unbound.Generics.LocallyNameless.Unsafe qualified as Unbound
 
 -- | Subtyping relation to handle universe cumulativity
 subtype :: Type -> Type -> TcMonad ()
-subtype (TyType l1) (TyType l2)
+subtype t1@(TyType l1) t2@(TyType l2)
   | l1 == LProp || l1 == LSet = return () -- LProp and LSet are subtypes of any Type
   | l1 <= l2 = return () -- Universe cumulativity: l1 <= l2
   | otherwise = do
       gamma <- Env.getLocalCtx
       Env.err
-        [ DS "Universe level mismatch: cannot use 'Type",
-          DS (show l1),
-          DS "' where 'Type",
-          DS (show l2),
-          DS "' is expected.",
+        [ DS "Universe level mismatch: cannot use",
+          DD t1,
+          DS "where",
+          DD t2,
+          DS "is expected.",
           DS "In context:",
           DD gamma
         ]

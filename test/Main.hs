@@ -47,9 +47,15 @@ tests =
               ]
 
       universesTests :: TestTree
-      universesTests = 
+      universesTests =
         testGroup "Universes" $
-        positiveTests "test/Universes" ["Hierarchy", "ProofErasability", "SingletonElim"]
+          positiveTests "test/Universes" ["Hierarchy", "ProofErasability", "SingletonElim", "SubsingletonElim"]
+            ++ negativeTests
+              "test/Universes"
+              [ ("'Type 3' is not a 'Type 1'", "InvalidHierarchy1", "Universe level mismatch:.*Type 4.*where.*Type 1.*expected"),
+                ("<Unnamed>", "InvalidHierarchy2", "\\?\\?\\?"),
+                ("Prop cannot be eliminated into set", "PropElim", "\\?\\?\\?")
+              ]
 
       positivityTests =
         testGroup

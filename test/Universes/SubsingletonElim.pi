@@ -1,15 +1,12 @@
 module Subsingleton where
 
---{ features: prop, datatypes:empty }
 data False : Prop := {}
 
---{ features: prop }
 data True : Prop := 
   Truth : True
 
---{ features: set, datatypes }
 data Unit : Set :=
-  Parens
+  Parens : Unit
 
 emptyElim1 : False -> Unit
 emptyElim1 = \f . case f of {}
