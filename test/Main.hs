@@ -54,7 +54,7 @@ tests =
               "test/Universes"
               [ ("'Type 3' is not a 'Type 1'", "InvalidHierarchy1", "Universe level mismatch:.*Type 4.*where.*Type 1.*expected"),
                 ("<Unnamed>", "InvalidHierarchy2", "\\?\\?\\?"),
-                ("Prop cannot be eliminated into set", "PropElim", "\\?\\?\\?")
+                ("Prop cannot be eliminated into set", "PropElim", "ev.*Prop.*cannot be eliminated into.*Set1.*Set")
               ]
 
       positivityTests =
