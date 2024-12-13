@@ -1,4 +1,4 @@
 module InvalidHierarchy1 where
 
 someType : Type 1
-someType = Type 2
+someType = Type 3
