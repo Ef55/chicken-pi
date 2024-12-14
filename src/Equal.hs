@@ -81,17 +81,6 @@ equate t1 t2 = do
       (x, body1, body2) <- unbind2 bnd1 bnd2
       equate rhs1 rhs2
       equate body1 body2
-    (TySigma tyA1 bnd1, TySigma tyA2 bnd2) -> do
-      (x, tyB1, tyB2) <- unbind2 bnd1 bnd2
-      equate tyA1 tyA2
-      equate tyB1 tyB2
-    (Prod a1 b1, Prod a2 b2) -> do
-      equate a1 a2
-      equate b1 b2
-    (LetPair s1 bnd1, LetPair s2 bnd2) -> do
-      equate s1 s2
-      ((x, y), body1, _, body2) <- Unbound.unbind2Plus bnd1 bnd2
-      equate body1 body2
     (TyEq a b, TyEq c d) -> do
       equate a c
       equate b d
@@ -153,12 +142,6 @@ whnf (App t1 t2) = do
     linearize :: Term -> [Term] -> [Term]
     linearize (App l r) a = linearize l (r : a)
     linearize t a = t : a
-whnf (LetPair a bnd) = do
-  nf <- whnf a
-  case nf of
-    Prod b1 c -> do
-      whnf (Unbound.instantiate bnd [b1, c])
-    _ -> return (LetPair nf bnd)
 whnf c@(Case s pred branches) = do
   ns <- whnf s
   sb <- pickBranch ns branches
@@ -220,7 +203,6 @@ unify ns tx ty = do
       (Var x, Var y) | x == y -> return []
       (Var y, yty) | y `notElem` ns -> return [Def y yty]
       (yty, Var y) | y `notElem` ns -> return [Def y yty]
-      (Prod a1 a2, Prod b1 b2) -> unifyArgs [a1, a2] [b1, b2]
       (TyEq a1 a2, TyEq b1 b2) -> (++) <$> unify ns a1 b1 <*> unify ns a2 b2
       (Lam bnd1, Lam bnd2) -> do
         (x, b1, b2) <- unbind2 bnd1 bnd2
@@ -234,20 +216,12 @@ unify ns tx ty = do
         if amb txnf || amb tynf
           then return []
           else Env.err [DS "Cannot equate", DD txnf, DS "and", DD tynf]
-  where
-    unifyArgs (t1 : a1s) (t2 : a2s) = do
-      ds <- unify ns t1 t2
-      ds' <- unifyArgs a1s a2s
-      return $ ds ++ ds'
-    unifyArgs [] [] = return []
-    unifyArgs _ _ = Env.err [DS "internal error (unify)"]
 
 -- | Is a term "ambiguous" when it comes to unification?
 -- In general, elimination forms are ambiguous because there are multiple
 -- solutions.
 amb :: Term -> Bool
 amb (App t1 t2) = True
-amb (LetPair _ _) = True
 amb (Subst _ _) = True
 -- (Case _ _ _) = True ???
 amb _ = False

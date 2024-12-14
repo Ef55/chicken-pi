@@ -112,20 +112,6 @@ inferType a = case a of
     Env.extendSourceLocation p a $ inferType a
   -- Extensions to the core language
 
-  -- i-sigma
-  (TySigma tyA bnd) -> do
-    (x, tyB) <- unbind bnd
-    l1 <- tcType tyA
-    Env.extendCtx (mkDecl x tyA) $ do
-      l2 <- tcType tyB
-      let l = case (l1, l2) of
-            (_, LProp) -> LProp
-            (_, LSet) -> LSet
-            (LConst i, LConst j) -> LConst (max i j)
-            (LProp, l) -> l
-            (LSet, l) -> l
-      return (TyType l) -- Sigma types are in universe level 'l'
-
   -- i-eq
   (TyEq a b) -> do
     aTy <- inferType a
@@ -438,36 +424,7 @@ checkType tm ty = do
           DD ty'
         ]
     -- Extensions to the core language
-    -- c-prod
-    (Prod a b) -> do
-      case ty' of
-        (TySigma tyA bnd) -> do
-          (x, tyB) <- unbind bnd
-          ensureType tyA
-          checkType a tyA
-          Env.extendCtxs [mkDecl x tyA, Def x a] $ do
-            ensureType tyB
-            checkType b tyB
-        _ ->
-          Env.err
-            [ DS "Products must have Sigma Type",
-              DD ty',
-              DS "found instead"
-            ]
-    -- c-letpair
-    (LetPair p bnd) -> do
-      ((x, y), body) <- Unbound.unbind bnd
-      pty <- inferType p
-      pty' <- Equal.whnf pty
-      case pty' of
-        TySigma tyA bnd' -> do
-          ensureType tyA
-          let tyB = instantiate bnd' (Var x)
-          Env.extendCtx (mkDecl x tyA) $ ensureType tyB
-          decl <- Equal.unify [] p (Prod (Var x) (Var y))
-          Env.extendCtxs ([mkDecl x tyA, mkDecl y tyB] ++ decl) $
-            checkType body ty'
-        _ -> Env.err [DS "Scrutinee of LetPair must have Sigma type"]
+    
     -- c-let
     (Let a bnd) -> do
       (x, b) <- unbind bnd

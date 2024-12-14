@@ -38,6 +38,3 @@ eqEx = someType0 = someType3
 
 impredPi : Prop
 impredPi = Type 42 -> eqEx
-
-impredSigma : Prop 
-impredSigma = { x : someType0 | eqEx }

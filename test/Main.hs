@@ -93,7 +93,7 @@ tests =
               ("Wildcard is not a variable", "WildcardVar", "expecting a variable"),
               ("Missing variable in pattern", "InvalidPattern1", "Instantiation of constructor One.*u0 u1"), -- "too few variables.*\\(_:Unit\\)"
               ("Extra variable in pattern", "InvalidPattern2", "Instantiation of constructor One.*u0 u1 u3 u4"), -- "too many variables.*u4.*unused"
-              ("Dependent wildcard must not be confused", "DependentWildcardConfusion", anyErr)
+              ("Dependent wildcards must not be confused", "DependentWildcardConfusion", anyErr)
             ]
    in testGroup
         "Tests"

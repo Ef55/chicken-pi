@@ -21,6 +21,7 @@ import Syntax hiding (moduleImports)
 import Text.Parsec hiding (Empty, State)
 import Text.Parsec.Expr (Assoc (..), Operator (..), buildExpressionParser)
 import Unbound.Generics.LocallyNameless qualified as Unbound
+import Unbound.Generics.LocallyNameless (string2Name)
 
 {-
 
@@ -244,6 +245,20 @@ importDef = do reserved "import" >> (ModuleImport <$> importName)
   where
     importName = intercalate "/" <$> sepBy1 identifier (reservedOp "/")
 
+--- Some tiny helpers
+
+mkAbs :: TName -> Term -> Term
+mkAbs x b = Lam (Unbound.bind x b)
+
+applyAll :: Term -> [Term] -> Term
+applyAll = foldl App
+
+mkProd :: Term -> Term -> Term
+mkProd l r = applyAll (Var $ string2Name "Prod") [l, r]
+
+mkSigma :: TName -> Term -> Term -> Term
+mkSigma x l r = applyAll (Var $ string2Name "Sigma") [l, mkAbs x r]
+
 ---
 --- Top level declarations
 ---
@@ -335,7 +350,7 @@ expr = do
       do
         n <- Unbound.fresh wildcardName
         return $ \tyA tyB ->
-          TySigma tyA (Unbound.bind n tyB)
+          mkSigma n tyA tyB
 
 -- A "term" is either a function application or a constructor
 -- application.  Breaking it out as a seperate category both
@@ -356,7 +371,6 @@ factor =
       set <?> "Set",
       lambda <?> "a lambda",
       fix <?> "a fixpoint",
-      try letPairExp <?> "a let pair",
       letExpr <?> "a let",
       substExpr <?> "a subst",
       refl <?> "Refl",
@@ -397,7 +411,7 @@ lambda = do
   where
     lam x m = Lam (Unbound.bind x m)
 
--- Fixpoints have the syntax 'fix f x . e'
+-- Fixpoints have the syntax 'fix f a1 ... ak [x] . e'
 fix :: LParser Term
 fix = do
   reservedOp "fix"
@@ -418,19 +432,6 @@ letExpr =
     rhs <- expr
     reserved "in"
     Let rhs . Unbound.bind x <$> expr
-
-letPairExp :: LParser Term
-letPairExp = do
-  reserved "let"
-  reservedOp "("
-  x <- variable
-  reservedOp ","
-  y <- variable
-  reservedOp ")"
-  reservedOp "="
-  scrut <- expr
-  reserved "in"
-  LetPair scrut . Unbound.bind (x, y) <$> expr
 
 -- Pattern matching
 patternMatching :: LParser Term
@@ -482,10 +483,10 @@ expProdOrAnnotOrParens =
                 e1 <- try (term >>= (\e1 -> colon >> return e1))
                 e2 <- expr
                 return $ Colon e1 e2,
-              do
-                e1 <- try (term >>= (\e1 -> comma >> return e1))
-                e2 <- expr
-                return $ Comma e1 e2,
+              -- do
+              --   e1 <- try (term >>= (\e1 -> comma >> return e1))
+              --   e2 <- expr
+              --   return $ Comma e1 e2,
               Nope <$> expr
             ]
    in do
@@ -500,7 +501,7 @@ expProdOrAnnotOrParens =
               )
           Colon a b -> return $ Ann a b
           Comma a b ->
-            return $ Prod a b
+            return $ mkProd a b
           Nope a -> return a
 
 -- subst e0 by e1
@@ -527,4 +528,4 @@ sigmaTy = do
   reservedOp "|"
   b <- expr
   reservedOp "}"
-  return (TySigma a (Unbound.bind x b))
+  return $ mkSigma x a b

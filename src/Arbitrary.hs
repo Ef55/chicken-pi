@@ -82,9 +82,6 @@ genTerm n
               (1, TyEq <$> go True n' <*> go True n'),
               (1, Subst <$> go True n' <*> go True n'),
               (1, Contra <$> go True n'),
-              (1, genSigma n'),
-              (1, Prod <$> genTerm n' <*> genTerm n'),
-              (1, genLetPair n'),
               (1, base)
             ]
 
@@ -101,26 +98,12 @@ genPi n = do
   tyB <- genTerm n
   return $ TyPi tyA (Unbound.bind p tyB)
 
-genSigma :: Int -> Gen Term
-genSigma n = do
-  p <- genName
-  tyA <- genTerm n
-  tyB <- genTerm n
-  return $ TySigma tyA (Unbound.bind p tyB)
-
 genLet :: Int -> Gen Term
 genLet n = do
   p <- genName
   rhs <- genTerm n
   b <- genTerm n
   return $ Let rhs (Unbound.bind p b)
-
-genLetPair :: Int -> Gen Term
-genLetPair n = do
-  p <- (,) <$> genName <*> genName
-  a <- genTerm n
-  b <- genTerm n
-  return $ LetPair a (Unbound.bind p b)
 
 genArg :: Int -> Gen Term
 genArg n = genTerm (n `div` 2)
@@ -155,7 +138,6 @@ instance Arbitrary Term where
   shrink (Lam bnd) = []
   shrink (TyPi tyA bnd) = [tyA]
   shrink (Let rhs bnd) = [rhs]
-  shrink (TySigma tyA bnd) = [tyA]
   shrink (TyEq a b) = [a, b] ++ [TyEq a' b | a' <- QC.shrink a] ++ [TyEq a b' | b' <- QC.shrink b]
   shrink (Subst a b) = [a, b] ++ [Subst a' b | a' <- QC.shrink a] ++ [Subst a b' | b' <- QC.shrink b]
   shrink (Contra a) = a : [Contra a' | a' <- QC.shrink a]
