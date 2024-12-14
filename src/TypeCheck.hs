@@ -102,7 +102,7 @@ inferType a = case a of
 
   -- i-ann
   (Ann a tyA) -> do
-    u <- tcType tyA
+    ensureType tyA
     checkType a tyA
     return tyA
 
@@ -331,19 +331,20 @@ checkBranch concreteScrut retPred typeParams cstr@(Constructor cstrName recCompo
 -------------------------------------------------------------------------
 
 -- | Make sure that the term is a "type" (i.e. that its type is a sort)
+-- Returns its sort.
 tcType :: Term -> TcMonad Level
 tcType tm = do
   ty <- inferType tm
   ty' <- Equal.whnf ty
-  case ty' of
-    TyType LProp -> return LProp
-    TyType LSet -> return LSet
-    TyType (LConst i) -> return (LConst i)
-    _ -> Env.cerr [DS "Expected", DD tm, DS "to be a sort, but found", DD ty']
+  tcSort ty'
+
+-- | Ensure that a term is a "type" (i.e. that its type is a sort)
+ensureType :: Term -> TcMonad ()
+ensureType = void . tcType
 
 -- | Make sure that the term is a sort
-isSort :: Term -> TcMonad Level
-isSort tm = do
+tcSort :: Term -> TcMonad Level
+tcSort tm = do
   tm' <- Equal.whnf tm
   case tm' of
     TyType s -> return s
@@ -362,7 +363,7 @@ arityOf t = iter [] t
 isArityOfSort :: Type -> TcMonad Level
 isArityOfSort t = do
   (_, t') <- arityOf t
-  isSort t'
+  tcSort t'
 
 isConstructorOf :: Type -> TName -> TcMonad ([(TName, Type)], [Term])
 isConstructorOf t typ = do
@@ -383,9 +384,9 @@ checkType tm ty = do
       (TyPi tyA bnd2) -> do
         -- unbind variables and check the body
         (x, body, tyB) <- unbind2 bnd bnd2
-        _ <- tcType tyA
+        ensureType tyA
         Env.extendCtx (Decl (TypeDecl x tyA)) $ do
-          _ <- tcType tyB
+          ensureType tyB
           -- Check the body
           checkType body tyB
         return ()
@@ -442,10 +443,10 @@ checkType tm ty = do
       case ty' of
         (TySigma tyA bnd) -> do
           (x, tyB) <- unbind bnd
-          _ <- tcType tyA
+          ensureType tyA
           checkType a tyA
           Env.extendCtxs [mkDecl x tyA, Def x a] $ do
-            _ <- tcType tyB
+            ensureType tyB
             checkType b tyB
         _ ->
           Env.err
@@ -460,9 +461,9 @@ checkType tm ty = do
       pty' <- Equal.whnf pty
       case pty' of
         TySigma tyA bnd' -> do
-          l1 <- tcType tyA
+          ensureType tyA
           let tyB = instantiate bnd' (Var x)
-          l2 <- Env.extendCtx (mkDecl x tyA) $ tcType tyB
+          Env.extendCtx (mkDecl x tyA) $ ensureType tyB
           decl <- Equal.unify [] p (Prod (Var x) (Var y))
           Env.extendCtxs ([mkDecl x tyA, mkDecl y tyB] ++ decl) $
             checkType body ty'
@@ -471,7 +472,7 @@ checkType tm ty = do
     (Let a bnd) -> do
       (x, b) <- unbind bnd
       tyA <- inferType a
-      l <- tcType tyA
+      ensureType tyA
       Env.extendCtxs [mkDecl x tyA, Def x a] $
         checkType b ty'
     -- c-refl
@@ -481,13 +482,13 @@ checkType tm ty = do
     -- c-subst
     (Subst a b) -> do
       tp <- inferType b
-      l_tp <- tcType tp
+      ensureType tp
       nf <- Equal.whnf tp
       (m, n) <- case nf of
         TyEq m n -> return (m, n)
         _ -> Env.err [DS "Subst requires an equality type, not", DD tp]
-      _ <- inferType m >>= tcType
-      _ <- inferType n >>= tcType
+      inferType m >>= ensureType
+      inferType n >>= ensureType
       edecl <- Equal.unify [] m n
       pdecl <- Equal.unify [] b Refl
       Env.extendCtxs (edecl ++ pdecl) $ checkType a ty'
@@ -498,8 +499,8 @@ checkType tm ty = do
       (a, b) <- case nf of
         TyEq m n -> return (m, n)
         _ -> Env.err [DS "Contra requires an equality type, not", DD ty_p]
-      _ <- inferType a >>= tcType
-      _ <- inferType b >>= tcType
+      inferType a >>= ensureType
+      inferType b >>= ensureType
       a' <- Equal.whnf a
       b' <- Equal.whnf b
       case (Equal.maybeUnconstruct a', Equal.maybeUnconstruct b') of
@@ -631,14 +632,14 @@ tcEntry (Def n term) = do
           ]
 tcEntry (Decl decl) = do
   duplicateTypeBindingCheck decl
-  u <- tcType (declType decl)
+  ensureType $ declType decl
   return $ AddHint decl
 tcEntry (Data (TypeConstructor typ pack)) = do
   -- Unpacking
   (params, (arity, constructors)) <- Unbound.unbind pack
   let td = TypeDecl typ (telescopeToPi params arity)
   -- Typecheck the type definition
-  _ <- tcType (declType td)
+  ensureType (declType td)
   -- Check that we are defining the arity of a sort
   sort <- isArityOfSort arity
   -- Check that the name of that type is not already defined
@@ -666,7 +667,7 @@ tcConstructor typeTelescope (dataTypeName, sort) (Constructor name _ cstrType) =
   -- Ensure that the constructor is well-typed
   -- In particular, combined with the following check that it constructs the correct
   -- type, this ensures that the type is fully applied.
-  _ <- tcType fullType
+  ensureType fullType
       `catchError` const
         ( Env.err
             [ DD name,
