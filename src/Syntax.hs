@@ -40,13 +40,6 @@ data Level
   | LConst Integer -- ^ Constant levels like 1, 2, ... (Type i in Coq's vocabulary)
   deriving (Show, Eq, Generic)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
-instance Ord Level where
-  LProp <= LProp = True
-  LSet <= LSet = True
-  LProp <= LConst _ = True
-  LSet <= LConst _ = True
-  LConst n <= LConst m = n <= m
-  _ <= _ = False
 
 -- Only allowing positive shifts simplifies things greatly
 levelAdd :: Level -> Integer -> Level

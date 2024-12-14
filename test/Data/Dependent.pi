@@ -1,6 +1,6 @@
 module Dependent where
 
-data Data : Set :=
+data Data : Type 1 :=
   C (X: Set) (x: X) (Y: Set) (X -> Y): Data
 
 Y : Data -> Set

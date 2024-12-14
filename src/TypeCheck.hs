@@ -23,22 +23,38 @@ import Unbound.Generics.LocallyNameless.Unsafe qualified as Unbound
 ---------------------------------------------------------------------
 
 -- | Subtyping relation to handle universe cumulativity
-subtype :: Type -> Type -> TcMonad ()
-subtype t1@(TyType l1) t2@(TyType l2)
-  | l1 == LProp || l1 == LSet = return () -- LProp and LSet are subtypes of any Type
-  | l1 <= l2 = return () -- Universe cumulativity: l1 <= l2
-  | otherwise = do
-      gamma <- Env.getLocalCtx
-      Env.err
-        [ DS "Universe level mismatch: cannot use",
-          DD t1,
-          DS "where",
-          DD t2,
-          DS "is expected.",
-          DS "In context:",
-          DD gamma
-        ]
-subtype ty1 ty2 = Equal.equate ty1 ty2
+-- From https://coq.inria.fr/doc/master/refman/language/cic.html#subtyping-rules
+isSubtype :: Type -> Type -> TcMonad ()
+isSubtype l r = do
+  l' <- Equal.whnf l
+  r' <- Equal.whnf r
+  subtype l' r'
+  where
+    subtype :: Type -> Type -> TcMonad ()
+    subtype (TyType l1) (TyType l2) =
+      case (l1, l2) of
+        -- Rule 1
+        _ | l1 == l2 -> return ()
+        -- Rule 2
+        (LConst i, LConst j) | i <= j -> return ()
+        -- Rule 3
+        (LSet, LConst _) -> return ()
+        -- Rule 4; Theory and practice disagree here...
+        (LProp, _) -> return ()
+        _ -> err
+      where
+        err =
+          Env.cerr
+            [ DS "Universe level mismatch: cannot use",
+              DD l1,
+              DS "where",
+              DD l2,
+              DS "is expected."
+            ]
+    -- Rule 5; not supported (yet) due to lack of use-cases
+    -- Rule 6; not covered, we don't support universe polymorphism
+    -- We take the symmetric closure to ease implementation
+    subtype ty1 ty2 = Equal.equate ty1 ty2
 
 -- | Infer/synthesize the type of a term
 inferType :: Term -> TcMonad Type
@@ -58,12 +74,16 @@ inferType a = case a of
     Env.extendCtx (Decl (TypeDecl x tyA)) $ do
       tyB' <- Equal.whnf tyB
       l2 <- tcType tyB'
-      let l = case (l1, l2) of
-            (_, LProp) -> LProp
-            (_, LSet) -> LSet
-            (LConst i, LConst j) -> LConst (max i j)
-            (LProp, l) -> l
-            (LSet, l) -> l
+      l <- case (l1, l2) of
+        -- Prod-Prop
+        (_, LProp) -> return LProp
+        -- Prod-Set
+        (LProp, LSet) -> return LSet
+        (LSet, LSet) -> return LSet
+        -- Prod-Type (with subtyping builtin)
+        (LConst i, LConst j) -> return $ LConst (max i j)
+        (_, LConst _) -> return l2
+        (LConst _, _) -> return l1
       return (TyType l) -- Pi types are in universe level 'l'
 
   -- i-app
@@ -310,7 +330,7 @@ checkBranch concreteScrut retPred typeParams cstr@(Constructor cstrName recCompo
 
 -------------------------------------------------------------------------
 
--- | Make sure that the term is a "type" (i.e. that it has type 'Type')
+-- | Make sure that the term is a "type" (i.e. that its type is a sort)
 tcType :: Term -> TcMonad Level
 tcType tm = do
   ty <- inferType tm
@@ -319,14 +339,14 @@ tcType tm = do
     TyType LProp -> return LProp
     TyType LSet -> return LSet
     TyType (LConst i) -> return (LConst i)
-    _ -> Env.err [DS "Expected", DD tm, DS "to have type 'Type l' for some level l, but found", DD ty']
+    _ -> Env.cerr [DS "Expected", DD tm, DS "to be a sort, but found", DD ty']
 
 -- | Make sure that the term is a sort
-isSort :: Term -> TcMonad Term
+isSort :: Term -> TcMonad Level
 isSort tm = do
   tm' <- Equal.whnf tm
   case tm' of
-    TyType _ -> return tm'
+    TyType s -> return s
     _ -> Env.err [DS "Expected", DD tm', DS "to be a sort."]
 
 arityOf :: Type -> TcMonad ([(TName, Type)], Type)
@@ -339,7 +359,7 @@ arityOf t = iter [] t
           iter ((x, xType) : acc) body
         _ -> return (reverse acc, t)
 
-isArityOfSort :: Type -> TcMonad Term
+isArityOfSort :: Type -> TcMonad Level
 isArityOfSort t = do
   (_, t') <- arityOf t
   isSort t'
@@ -363,24 +383,9 @@ checkType tm ty = do
       (TyPi tyA bnd2) -> do
         -- unbind variables and check the body
         (x, body, tyB) <- unbind2 bnd bnd2
-        l1 <- tcType tyA
+        _ <- tcType tyA
         Env.extendCtx (Decl (TypeDecl x tyA)) $ do
-          l2 <- tcType tyB
-          let l = case (l1, l2) of
-                (_, LProp) -> LProp
-                (_, LSet) -> LSet
-                (LConst i, LConst j) -> LConst (max i j)
-                (LProp, l) -> l
-                (LSet, l) -> l
-          -- Ensure that l <= tyPiLevel (universe cumulativity)
-          tyPiLevel <- tcType ty'
-          unless (l <= tyPiLevel) $
-            Env.err
-              [ DS "Expected",
-                DD ty',
-                DS "but found a function type in universe level",
-                DS (show l)
-              ]
+          _ <- tcType tyB
           -- Check the body
           checkType body tyB
         return ()
@@ -437,25 +442,10 @@ checkType tm ty = do
       case ty' of
         (TySigma tyA bnd) -> do
           (x, tyB) <- unbind bnd
-          l1 <- tcType tyA
+          _ <- tcType tyA
           checkType a tyA
           Env.extendCtxs [mkDecl x tyA, Def x a] $ do
-            l2 <- tcType tyB
-            let l = case (l1, l2) of
-                  (_, LProp) -> LProp
-                  (_, LSet) -> LSet
-                  (LConst i, LConst j) -> LConst (max i j)
-                  (LProp, l) -> l
-                  (LSet, l) -> l
-            -- Ensure that l <= tySigmaLevel (universe cumulativity)
-            tySigmaLevel <- tcType ty'
-            unless (l <= tySigmaLevel) $
-              Env.err
-                [ DS "Expected",
-                  DD ty',
-                  DS "but found a Sigma type in universe level",
-                  DS (show l)
-                ]
+            _ <- tcType tyB
             checkType b tyB
         _ ->
           Env.err
@@ -556,7 +546,7 @@ checkType tm ty = do
     -- c-infer
     _ -> do
       tyA <- inferType tm
-      subtype tyA ty' -- Use subtype to handle universe cumulativity
+      isSubtype tyA ty' -- Use subtype to handle universe cumulativity
 
 --------------------------------------------------------
 -- Using the typechecker for decls and modules and stuff
@@ -660,7 +650,7 @@ tcEntry (Data (TypeConstructor typ pack)) = do
   return $ AddCtx (Data (TypeConstructor typ $ Unbound.bind params (arity, cstrs)) : Decl td : cstDecls)
 tcEntry (Smaller _ _) = Env.err [DS "User defined smaller declarations are not allowed."]
 
-tcConstructor :: Telescope -> (TName, Type) -> Constructor -> TcMonad (Constructor, TypeDecl)
+tcConstructor :: Telescope -> (TName, Level) -> Constructor -> TcMonad (Constructor, TypeDecl)
 tcConstructor typeTelescope (dataTypeName, sort) (Constructor name _ cstrType) = do
   -- Construct the type(s) of the constructor
   -- For
@@ -673,18 +663,18 @@ tcConstructor typeTelescope (dataTypeName, sort) (Constructor name _ cstrType) =
       -- Is T -> A -> D I
       fullType = telescopeToPi typeTelescope patternType
 
-  -- Ensure that the constructor generates the correct sort
+  -- Ensure that the constructor is well-typed
   -- In particular, combined with the following check that it constructs the correct
   -- type, this ensures that the type is fully applied.
-  checkType fullType sort
-    `catchError` const
-      ( Env.err
-          [ DD fullType,
-            DS "should have type",
-            DD sort,
-            DS "which is the sort of its constructor (is it fully applied?)."
-          ]
-      )
+  _ <- tcType fullType
+      `catchError` const
+        ( Env.err
+            [ DD name,
+              DS "has type",
+              DD fullType,
+              DS $ "which is not-well typed (is " ++ show dataTypeName ++ " fully applied?)"
+            ]
+        )
 
   -- Check that the constructor is for the datatype under consideration.
   (params, typeArgs) <-

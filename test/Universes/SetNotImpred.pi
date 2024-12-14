@@ -1,0 +1,4 @@
+module SetNotImpred where
+
+s: Set
+s = Set

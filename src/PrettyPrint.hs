@@ -122,6 +122,8 @@ instance Disp (Unbound.Name Term) where
 
 -------------------------------------------------------------------------
 
+instance Disp Level
+
 instance Disp Term
 
 instance Disp Module
@@ -339,12 +341,16 @@ instance Display (Unbound.Name Term) where
     b <- ask showLongNames
     return (if b then debugDisp n else disp n)
 
-instance Display Term where
-  display (TyType LProp) = return $ PP.text "Prop"
-  display (TyType LSet) = return $ PP.text "Set"
-  display (TyType (LConst l)) = do
+instance Display Level where
+  display LProp = return $ PP.text "Prop"
+  display LSet = return $ PP.text "Set"
+  display (LConst l) = do
     i <- display l
     return $ PP.text "Type" <+> i
+
+
+instance Display Term where
+  display (TyType l) = display l
   display (Var n) = display n
   display a@(Lam b) = do
     n <- ask prec

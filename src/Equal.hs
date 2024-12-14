@@ -37,9 +37,9 @@ equateLevels l1 l2 = do
       gamma <- Env.getLocalCtx
       Env.err
         [ DS "Universe level mismatch: expected level",
-          DS (show l2),
+          DD l2,
           DS "but found level",
-          DS (show l1),
+          DD l1,
           DS "in context:",
           DD gamma
         ]
