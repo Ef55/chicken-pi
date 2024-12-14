@@ -1,0 +1,9 @@
+module Eq where
+
+data Eq (A: Set) : A -> A -> Prop :=
+  eq (a: A): Eq A a a
+
+substEq : (A: Set) -> (P: A -> Prop) -> (a: A) -> (b: A) -> Eq A a b -> P a -> P b
+substEq = \_ P _ _ eq. case eq in Eq A' a' b' return (P a' -> P b') of
+  eq _ -> \pa . pa
+

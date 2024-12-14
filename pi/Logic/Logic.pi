@@ -1,0 +1,19 @@
+module Logic where
+
+data True: Prop :=
+  trivial: True
+
+data False: Prop := {}
+
+data And (P: Prop) (Q: Prop): Prop :=
+  conj (P) (Q): And P Q
+
+data Or (P: Prop) (Q: Prop) : Prop :=
+  lor (P): Or P Q
+  ror (Q): Or P Q
+
+not : Prop -> Prop
+not = \P . P -> False
+
+exfalso : (P: Prop) -> (Q: Prop) -> P -> not P -> Q
+exfalso = \_ _ p np . case np p of {}

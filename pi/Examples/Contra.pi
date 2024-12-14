@@ -1,0 +1,33 @@
+module Contra where
+
+import Logic
+import Eq
+
+-- We demonstrate how to derive a contradiction from
+-- an equality between two different constructors.
+
+data T: Set :=
+  C0: T
+  C1: T
+
+-- Discriminants for the constructors
+
+discC0 : T -> Prop
+discC0 = \t . case t return Prop of
+  C0 -> True
+  C1 -> False
+
+eqToDisc : (x: T) -> Eq T C0 x -> discC0 x
+eqToDisc = \x . case x as x_ return (Eq T C0 x_ -> discC0 x_) of
+  C0 -> \_ . trivial
+  C1 -> \eq . substEq T discC0 C0 C1 eq trivial
+
+-- Now, let's show that C0 != C1
+
+notEq : not (Eq T C0 C1)
+-- TODO: make it so that the type annotation is not required
+notEq = \eq . case (eqToDisc C1 eq : False) of {}
+  
+-- Unfolding not yields the statement we were looking for
+contradiction : Eq T C0 C1 -> False
+contradiction = notEq

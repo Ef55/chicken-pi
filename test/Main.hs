@@ -89,11 +89,14 @@ tests =
 
 examples :: TestTree
 examples =
-  let dataExamples = testGroup "Data" (tcFile ["pi/Data"] <$> ["Void", "Unit", "Fun", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma", "Fin", "Vect", "HList"])
+  let dataExamples = testGroup "Data" (positiveTests "pi/Data" ["Void", "Unit", "Fun", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma", "Fin", "Vect", "HList"])
+      logicExamples = testGroup "Logic" $ positiveTests "pi/Logic" ["Logic", "Eq"]
+      otherExamples = testGroup "Examples" $ positiveTests "pi/Examples" ["PHOAS", "Contra"]
    in testGroup
         "Examples"
         [ dataExamples,
-          tcFile ["pi/Examples", "pi/Data"] "Lambda.pi"
+          logicExamples,
+          otherExamples
         ]
 
 main :: IO ()
@@ -109,6 +112,9 @@ main = do
 --------------------------------------------------------------------------------
 -- Helpers for tests definition
 --------------------------------------------------------------------------------
+
+standardLibrary :: [String]
+standardLibrary = ["pi/Data", "pi/Logic"]
 
 positiveTests :: String -> [String] -> [TestTree]
 positiveTests path tests = tcFile [path] <$> tests
@@ -128,7 +134,7 @@ data Result
 
 tester :: String -> [String] -> String -> (Result -> Assertion) -> TestTree
 tester testName path fileName k = testCase testName $ do
-  v <- runExceptT (getModules path fileName)
+  v <- runExceptT (getModules (path ++ standardLibrary) fileName)
   case v of
     Left b -> k $ ParsingFailure b
     Right val -> case runTcMonad emptyEnv (tcModules val) of
