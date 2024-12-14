@@ -1,0 +1,20 @@
+module PropElim where 
+
+-- Define natural numbers in Set
+data Nat : Set :=
+  Zero : Nat
+  Succ : Nat -> Nat
+
+-- Define the Even predicate on Nat in Prop with multiple constructors
+data Even : Nat -> Prop :=
+  EvenZero : Even Zero
+  EvenSuccSucc (n: Nat) (Even n): Even (Succ (Succ n))
+
+data Set1 : Set :=
+  elt1 : Set1
+  elt2 : Set1
+
+invalidElimEvenToSet: (n: Nat) -> Even n -> Set1
+invalidElimEvenToSet = \m ev . case ev of
+  EvenZero -> elt1        -- Should fail
+  EvenSuccSucc m' ev' -> elt2 -- Should fail

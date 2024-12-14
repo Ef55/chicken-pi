@@ -1,0 +1,16 @@
+module Subsingleton where
+
+data False : Prop := {}
+
+data True : Prop := 
+  Truth : True
+
+data Unit : Set :=
+  Parens : Unit
+
+emptyElim1 : False -> Unit
+emptyElim1 = \f . case f of {}
+
+emptyElim2 : True -> Unit
+emptyElim2 = \t . case t of
+  Truth -> Parens

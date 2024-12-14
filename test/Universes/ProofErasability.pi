@@ -1,0 +1,38 @@
+module ProofErasability where
+
+-- Define a type in Prop
+data True : Prop :=
+  Truth : True
+
+data Set1 : Set :=
+  elt1 : Set1
+  elt2 : Set1
+
+data And (a : Prop) (b : Prop) : Prop :=
+  andIntro : And a b
+
+data Equality (A: Set) (a: A) (b: A): Prop :=
+  Eq : Equality A a b
+
+-- Eliminate into Prop
+proofRefl : (a: Set1) -> Equality Set1 a a -> True
+proofRefl = \_ e . case e of
+  Eq -> Truth
+
+data prop1 : Prop :=
+  prf : prop1 
+
+data prop2 : Prop := 
+  prf : prop2
+
+-- Right elimination and
+andElimL : (a : Prop) -> (b : Prop) -> (conj : And a b) -> Prop 
+andElimL = \a _ conj . case conj of
+  andIntro -> a
+
+-- Right elimination and
+andElimR : (a : Prop) -> (b : Prop) -> (conj : And a b) -> Prop 
+andElimR = \_ b conj . case conj of
+  andIntro -> b
+
+-- 

@@ -24,17 +24,17 @@ import Unbound.Generics.LocallyNameless.Unsafe qualified as Unbound
 
 -- | Subtyping relation to handle universe cumulativity
 subtype :: Type -> Type -> TcMonad ()
-subtype (TyType l1) (TyType l2)
+subtype t1@(TyType l1) t2@(TyType l2)
   | l1 == LProp || l1 == LSet = return () -- LProp and LSet are subtypes of any Type
   | l1 <= l2 = return () -- Universe cumulativity: l1 <= l2
   | otherwise = do
       gamma <- Env.getLocalCtx
       Env.err
-        [ DS "Universe level mismatch: cannot use 'Type",
-          DS (show l1),
-          DS "' where 'Type",
-          DS (show l2),
-          DS "' is expected.",
+        [ DS "Universe level mismatch: cannot use",
+          DD t1,
+          DS "where",
+          DD t2,
+          DS "is expected.",
           DS "In context:",
           DD gamma
         ]
@@ -59,13 +59,12 @@ inferType a = case a of
       tyB' <- Equal.whnf tyB
       l2 <- tcType tyB'
       let l = case (l1, l2) of
-           (_, LProp) -> LProp
-           (_, LSet) -> LSet
-           (LConst i, LConst j) -> LConst (max i j)
-           (LProp, l) -> l
-           (LSet, l) -> l
+            (_, LProp) -> LProp
+            (_, LSet) -> LSet
+            (LConst i, LConst j) -> LConst (max i j)
+            (LProp, l) -> l
+            (LSet, l) -> l
       return (TyType l) -- Pi types are in universe level 'l'
-
 
   -- i-app
   (App a b) -> do
@@ -95,12 +94,12 @@ inferType a = case a of
     l1 <- tcType tyA
     Env.extendCtx (mkDecl x tyA) $ do
       l2 <- tcType tyB
-      let l = case (l1, l2) of 
-           (_, LProp) -> LProp
-           (_, LSet) -> LSet
-           (LConst i, LConst j) -> LConst (max i j)
-           (LProp, l) -> l
-           (LSet, l) -> l
+      let l = case (l1, l2) of
+            (_, LProp) -> LProp
+            (_, LSet) -> LSet
+            (LConst i, LConst j) -> LConst (max i j)
+            (LProp, l) -> l
+            (LSet, l) -> l
       return (TyType l) -- Sigma types are in universe level 'l'
 
   -- i-eq
@@ -113,6 +112,14 @@ inferType a = case a of
     Env.err [DS "Must have a type annotation for", DD a]
 
 -------------------------------------------------------------------------
+
+isEmptyOrSingleton :: TypeConstructor -> TcMonad Bool
+isEmptyOrSingleton (TypeConstructor _ pack) = do
+  (_, (_, constructors)) <- Unbound.unbind pack
+  return $ case constructors of
+    [] -> True -- Empty type
+    [_] -> True -- Singleton type
+    _ -> False -- More than one constructor
 
 checkCase :: Term -> DestructionPredicate -> [Branch] -> Maybe Type -> TcMonad Type
 checkCase scrut pred branches mRet = do
@@ -177,6 +184,24 @@ checkScrutinee s p@(DestructionPredicate bPred) mExp = do
   case mExp of
     Nothing -> return ()
     Just exp -> Equal.equate exp ret
+
+  scrutKind <- inferType sType
+  singletonScrut <- isEmptyOrSingleton typeDecl
+  -- Should check the kind of the whole destruction predicate,
+  -- not just the kind of the instantiated predicate. I don't think that changes
+  -- anything, but that's what the theory says. 
+  retKind <- inferType ret
+  when (aeq scrutKind (TyType LProp) && not singletonScrut && not (aeq retKind (TyType LProp))) $
+    Env.err
+      [ DS "Scrutinee",
+        DD s,
+        DS "of kind",
+        DD scrutKind,
+        DS "cannot be eliminated into type",
+        DD ret,
+        DS "which has type",
+        DD retKind
+      ]
 
   -- Check that the "decoration" at the start of the in clause
   -- matches the type being destructed.
@@ -303,7 +328,7 @@ checkType tm ty = do
         (x, body, tyB) <- unbind2 bnd bnd2
         l1 <- tcType tyA
         Env.extendCtx (Decl (TypeDecl x tyA)) $ do
-          l2 <- tcType tyB 
+          l2 <- tcType tyB
           let l = case (l1, l2) of
                 (_, LProp) -> LProp
                 (_, LSet) -> LSet
@@ -346,11 +371,11 @@ checkType tm ty = do
           Env.extendCtxs [mkDecl x tyA, Def x a] $ do
             l2 <- tcType tyB
             let l = case (l1, l2) of
-                 (_, LProp) -> LProp
-                 (_, LSet) -> LSet
-                 (LConst i, LConst j) -> LConst (max i j)
-                 (LProp, l) -> l
-                 (LSet, l) -> l
+                  (_, LProp) -> LProp
+                  (_, LSet) -> LSet
+                  (LConst i, LConst j) -> LConst (max i j)
+                  (LProp, l) -> l
+                  (LSet, l) -> l
             -- Ensure that l <= tySigmaLevel (universe cumulativity)
             tySigmaLevel <- tcType ty'
             unless (l <= tySigmaLevel) $

@@ -46,7 +46,15 @@ tests =
               [ ("Type mentioned in return clause must match", "WrongInName", "'in' clause.*D1.*should be.*D0")
               ]
 
-      universesTests = testGroup "Universes" (tcFile ["test/Universes"] <$> [ "Hierarchy" ])
+      universesTests :: TestTree
+      universesTests =
+        testGroup "Universes" $
+          positiveTests "test/Universes" ["Hierarchy", "ProofErasability", "SingletonElim", "SubsingletonElim"]
+            ++ negativeTests
+              "test/Universes"
+              [ ("'Type 3' is not a 'Type 1'", "InvalidHierarchy1", "Universe level mismatch:.*Type 4.*where.*Type 1.*expected"),
+                ("Prop cannot be eliminated into set", "PropElim", "ev.*Prop.*cannot be eliminated into.*Set1.*Set")
+              ]
 
       positivityTests =
         testGroup
