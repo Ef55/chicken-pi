@@ -207,6 +207,10 @@ instance Display Entry where
       let top = PP.text "data" <+> dtn <+> dp <+> PP.text ":" <+> ds <+> PP.text ":="
       constructors <- mapM display cstrs
       return $ top $$ PP.nest 2 (PP.vcat constructors)
+  display (Smaller l r) = do
+    dl <- display l
+    dr <- display r
+    return $ dl <+> PP.text ">>" <+> dr
 
 -------------------------------------------------------------------------
 
@@ -468,6 +472,18 @@ instance Display Term where
     return $
       parens (levelCase < p) $
         if null cases then top <+> PP.text "{ }" else top $$ PP.nest 2 (PP.vcat db)
+  display (Fix bnd) =
+    Unbound.lunbind bnd $ \((f, xs), bnd2) -> Unbound.lunbind bnd2 $ \(x, body) -> do
+      n <- ask prec
+      df <- display f
+      dxs <- mapM display xs
+      dx <- display x
+      db <- display body
+      return $ parens (levelLam < n) $ PP.hang (PP.text "fix" <+> df <+> PP.sep dxs <+> PP.text "[" <+> dx <+> PP.text "]" <+> PP.text ".") 2 db
+  display (Guarded by t) = do
+    db <- display by
+    dt <- withPrec 0 $ display t
+    return $ PP.text "[" <+> db <+> PP.text "|" <+> dt <+> PP.text "]"
 
 instance Display DestructionPredicate where
   display (DestructionPredicate bnd) = Unbound.lunbind bnd $ \((mAs, mIn), mRet) -> do

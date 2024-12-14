@@ -60,6 +60,15 @@ equate t1 t2 = do
     (Lam bnd1, Lam bnd2) -> do
       (_, b1, b2) <- unbind2 bnd1 bnd2
       equate b1 b2
+    (Fix bnd1, Fix bnd2) -> do
+      ubnd <- Unbound.unbind2 bnd1 bnd2
+      case ubnd of
+        Nothing -> tyErr n1 n2
+        Just (_, bnd1', _, bnd2') -> do
+          ubnd' <- Unbound.unbind2 bnd1' bnd2'
+          case ubnd' of
+            Nothing -> tyErr n1 n2
+            Just (_, body1, _, body2) -> equate body1 body2
     (App a1 a2, App b1 b2) ->
       equate a1 b1 >> equate a2 b2
     (TyPi tyA1 bnd1, TyPi tyA2 bnd2) -> do
@@ -130,12 +139,20 @@ whnf (Var x) = do
     (Just d) -> whnf d
     _ -> return (Var x)
 whnf (App t1 t2) = do
-  nf <- whnf t1
-  case nf of
-    (Lam bnd) -> do
-      whnf (instantiate bnd t2)
-    _ -> do
-      return (App nf t2)
+  t1' <- whnf t1
+  case linearize t1' [] of
+    [Lam bnd] -> whnf $ instantiate bnd t2
+    f@(Fix bnd) : args -> do
+      ((self, xs), bnd') <- Unbound.unbind bnd
+      -- Fix can only be reduced if it is applied up to the recursive parameter.
+      if length xs == length args
+        then whnf $ Unbound.substs ((self, f) : zip xs args) (Unbound.instantiate bnd' [t2])
+        else return $ App t1' t2
+    _ -> return $ App t1' t2
+  where
+    linearize :: Term -> [Term] -> [Term]
+    linearize (App l r) a = linearize l (r : a)
+    linearize t a = t : a
 whnf (LetPair a bnd) = do
   nf <- whnf a
   case nf of

@@ -11,7 +11,7 @@ data Data' : Set :=
   C (Data'): Data'
 
 test0 : Data' -> Data
-test0 = \d . case d of
+test0 = fix test0 [d] . case d of
   A _ v0 _ -> v0 
   B _ _ v1 -> v1
   C v2 -> test0 v2

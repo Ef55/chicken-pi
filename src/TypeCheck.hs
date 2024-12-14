@@ -74,6 +74,10 @@ inferType a = case a of
       (TyPi tyA bnd) -> do
         checkType b tyA
         return (instantiate bnd b)
+      (Guarded x (TyPi tyA bnd)) -> do
+        checkType b tyA
+        structurallySmaller x b
+        return (instantiate bnd b)
       _ -> Env.err [DS "Expected a function type but found", DD a, DS "of type", DD ty1]
 
   -- i-ann
@@ -121,10 +125,37 @@ isEmptyOrSingleton (TypeConstructor _ pack) = do
     [_] -> True -- Singleton type
     _ -> False -- More than one constructor
 
+structurallySmaller :: TName -> Term -> TcMonad ()
+structurallySmaller p t = do
+  t' <- Equal.whnf t
+  case t' of
+    Var n -> do
+      decreasing <- Env.lookupSmaller (Var p) n
+      unless decreasing err
+    App l _ -> structurallySmaller p l
+    Lam bnd -> do
+      (_, body) <- Unbound.unbind bnd
+      structurallySmaller p body
+    _ -> err
+
+  where
+    err :: TcMonad () = do
+      gamma <- Env.getLocalCtx
+      Env.err
+        [ DS "Recursive calls requires",
+          DD t,
+          DS "to be structurally smaller than",
+          DD p,
+          DS "which could not be ensured. Context:",
+          DD gamma
+        ]
+
+-------------------------------------------------------------------------
+
 checkCase :: Term -> DestructionPredicate -> [Branch] -> Maybe Type -> TcMonad Type
 checkCase scrut pred branches mRet = do
   (typeDecl, typeParams, pred, ret) <- checkScrutinee scrut pred mRet
-  checkMatch pred typeDecl typeParams branches
+  checkMatch scrut pred typeDecl typeParams branches
   return ret
 
 instantiateDestructionPredicate :: Term -> [Type] -> Unbound.Bind (TName, Pattern) Type -> TcMonad Type
@@ -228,8 +259,8 @@ checkScrutinee s p@(DestructionPredicate bPred) mExp = do
           paramCount = length params
       return $ splitAt paramCount args
 
-checkMatch :: Unbound.Bind (TName, Pattern) Type -> TypeConstructor -> [Type] -> [Branch] -> TcMonad ()
-checkMatch ret (TypeConstructor typeName pack) typeParams branches = do
+checkMatch :: Term -> Unbound.Bind (TName, Pattern) Type -> TypeConstructor -> [Type] -> [Branch] -> TcMonad ()
+checkMatch scrut ret (TypeConstructor typeName pack) typeParams branches = do
   (_, (_, constructors)) <- instantiateTelescope pack typeParams
 
   when (length branches /= length constructors) $
@@ -238,10 +269,10 @@ checkMatch ret (TypeConstructor typeName pack) typeParams branches = do
         DD typeName,
         DS $ "has " ++ show (length constructors) ++ " constructors."
       ]
-  mapM_ (uncurry (checkBranch ret typeParams)) (zip constructors branches)
+  mapM_ (uncurry (checkBranch scrut ret typeParams)) (zip constructors branches)
 
-checkBranch :: Unbound.Bind (TName, Pattern) Type -> [Type] -> Constructor -> Branch -> TcMonad ()
-checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch branch) = do
+checkBranch :: Term -> Unbound.Bind (TName, Pattern) Type -> [Type] -> Constructor -> Branch -> TcMonad ()
+checkBranch concreteScrut retPred typeParams cstr@(Constructor cstrName recComponents cstrType) (Branch branch) = do
   (pat@(PatCon cstrStr xs), body) <- Unbound.unbind branch
   when (cstrName /= string2Name cstrStr) $
     Env.err
@@ -254,13 +285,19 @@ checkBranch retPred typeParams cstr@(Constructor cstrName cstrType) (Branch bran
 
   let cstrVars = Var <$> xs
       cstrArgs = typeParams ++ cstrVars
-      scrut = foldl App (Var cstrName) cstrArgs
+      abstractScrut = foldl App (Var cstrName) cstrArgs
   typeArgs <- Equal.instantiateConstructorType cstrName cstrArgs
-  ret <- instantiateDestructionPredicate scrut typeArgs retPred
+  ret <- instantiateDestructionPredicate abstractScrut typeArgs retPred
 
   -- Retrieve the type of the bindings in the telescope
   (telescope, _) <- instantiateTelescope cstrType cstrVars
-  let entries = zipWith (\x t -> Decl $ TypeDecl x t) xs telescope
+  when (length xs /= length recComponents) $ Env.err [
+      DL $ DD <$> xs, DS "|", DL $ DD <$> recComponents
+    ]
+  let typingEntries = zipWith (\x t -> Decl $ TypeDecl x t) xs telescope
+      -- Add a "Smaller" entry for each recursive component
+      smallerEntries = map (Smaller concreteScrut . snd) $ filter fst $ zip recComponents xs
+      entries = typingEntries ++ smallerEntries
 
   when (length telescope /= length xs) $
     Env.err
@@ -348,6 +385,40 @@ checkType tm ty = do
           checkType body tyB
         return ()
       _ -> Env.err [DS "Lambda expression should have a function type, not", DD ty']
+    (Fix bnd) -> do
+      ((self, xs), bnd') <- Unbound.unbind bnd
+      (paramTypes, ty'') <- introBindings xs [] ty'
+      case ty'' of
+        (TyPi tyA bnd2) -> do
+          -- unbind the variables in the lambda expression and pi type
+          (x, body, tyB) <- unbind2 bnd' bnd2
+          -- check the type of the body of the lambda expression
+          let guardedTy =
+                foldr
+                  (\(x, t) r -> TyPi t $ Unbound.bind x r)
+                  (Guarded x $ TyPi tyA $ Unbound.bind x tyB)
+                  (zip xs paramTypes)
+          -- Env.warn [DD ty', DS "|", DD guardedTy]
+          Env.extendCtxs
+            ( -- Add a binding for this recursive function...
+              Decl (TypeDecl self guardedTy)
+                -- ... another one for the recursive parameter...
+                : Decl (TypeDecl x tyA)
+                -- ... and for all the other parameters.
+                : (Decl <$> zipWith TypeDecl xs paramTypes)
+            )
+            $ checkType body tyB
+        _ -> Env.err [DS "Found type", DD ty'', DS "while fix still has to introduce its last argument."]
+      where
+        introBindings :: [TName] -> [Type] -> Type -> TcMonad ([Type], Type)
+        introBindings [] acc r = return (reverse acc, r)
+        introBindings (b : bs) acc r =
+          case r of
+            (TyPi tyA bnd) -> do
+              r' <- Equal.whnf $ Unbound.instantiate bnd [Var b]
+              introBindings bs (tyA : acc) r'
+            _ -> Env.err [DS "Found type", DD r, DS "while fix still has to introduce", DD b]
+
     -- Practicalities
     (Pos p a) ->
       Env.extendSourceLocation p a $ checkType a ty'
@@ -558,7 +629,7 @@ tcEntry (Def n term) = do
                     DD decl
                   ]
            in do
-                Env.extendCtx (Decl decl) $ checkType term (declType decl) `catchError` handler
+                checkType term (declType decl) `catchError` handler
                 return $ AddCtx [Decl decl, Def n term]
     die term' =
       Env.extendSourceLocation (unPosFlaky term) term $
@@ -572,27 +643,35 @@ tcEntry (Decl decl) = do
   duplicateTypeBindingCheck decl
   u <- tcType (declType decl)
   return $ AddHint decl
-tcEntry dat@(Data (TypeConstructor typ pack)) = do
+tcEntry (Data (TypeConstructor typ pack)) = do
   -- Unpacking
   (params, (arity, constructors)) <- Unbound.unbind pack
   let td = TypeDecl typ (telescopeToPi params arity)
-
   -- Typecheck the type definition
   _ <- tcType (declType td)
   -- Check that we are defining the arity of a sort
   sort <- isArityOfSort arity
   -- Check that the name of that type is not already defined
   duplicateTypeBindingCheck td
+  -- Check the constructors
+  (cstrs, csts) <- unzip <$> Env.extendCtx (Decl td) (mapM (tcConstructor params (typ, sort)) constructors)
+  -- Return env's extensions
+  let cstDecls = Decl <$> csts
+  return $ AddCtx (Data (TypeConstructor typ $ Unbound.bind params (arity, cstrs)) : Decl td : cstDecls)
+tcEntry (Smaller _ _) = Env.err [DS "User defined smaller declarations are not allowed."]
 
-  cstrs <- Env.extendCtx (Decl td) $ mapM (tcConstructor params (typ, sort)) constructors
-  let decls = Decl <$> cstrs
-  return $ AddCtx (dat : Decl td : decls)
-
-tcConstructor :: Telescope -> (TName, Type) -> Constructor -> TcMonad TypeDecl
-tcConstructor typeTelescope (dataTypeName, sort) (Constructor name cstrType) = do
-  -- Construct the type of the constructor as a constant of the language
+tcConstructor :: Telescope -> (TName, Type) -> Constructor -> TcMonad (Constructor, TypeDecl)
+tcConstructor typeTelescope (dataTypeName, sort) (Constructor name _ cstrType) = do
+  -- Construct the type(s) of the constructor
+  -- For
+  -- ```
+  -- data D (_ : T): U -> S := C0 (_ : A) : D I
+  -- ```
   (cstrTelescope, rType) <- Unbound.unbind cstrType
-  let fullType = telescopeToPi typeTelescope $ telescopeToPi cstrTelescope rType
+  let -- Is A -> D I
+      patternType = telescopeToPi cstrTelescope rType
+      -- Is T -> A -> D I
+      fullType = telescopeToPi typeTelescope patternType
 
   -- Ensure that the constructor generates the correct sort
   -- In particular, combined with the following check that it constructs the correct
@@ -641,7 +720,10 @@ tcConstructor typeTelescope (dataTypeName, sort) (Constructor name cstrType) = d
   -- Check the positivity condition
   checkPositivity False dataTypeName fullType
 
-  return $ TypeDecl name fullType
+  recComponents <- checkRecursiveComponents dataTypeName patternType
+
+  -- TODO: add rec components
+  return (Constructor name recComponents cstrType, TypeDecl name fullType)
   where
     checkPositivity :: Bool -> TName -> Term -> TcMonad ()
     checkPositivity strict v t = do
@@ -669,6 +751,15 @@ tcConstructor typeTelescope (dataTypeName, sort) (Constructor name cstrType) = d
                 DS "is currently being defined, and hence is not allowed be used as an argument in",
                 DD t'
               ]
+
+    checkRecursiveComponents :: TName -> Type -> TcMonad [Bool]
+    checkRecursiveComponents v t = do
+      t' <- Equal.whnf t
+      case t' of
+        (TyPi boundType bnd) -> do
+          (_, r) <- Unbound.unbind bnd
+          (occursInTerm v boundType :) <$> checkRecursiveComponents v r
+        _ -> return []
 
     occursInTerm :: TName -> Term -> Bool
     occursInTerm v' t =

@@ -14,7 +14,7 @@ module Parser
 where
 
 import Control.Monad.Except (MonadError (throwError))
-import Control.Monad.State.Lazy hiding (join)
+import Control.Monad.State.Lazy hiding (join, fix)
 import Data.List (foldl', intercalate)
 import LayoutToken qualified as Token
 import Syntax hiding (moduleImports)
@@ -178,7 +178,8 @@ piforallStyle =
           "if",
           "then",
           "else",
-          "()"
+          "()",
+          "fix"
         ],
       Token.reservedOpNames =
         ["!", "?", "\\", ":", ".", ",", "<", "=", "+", "-", "*", "^", "()", "_", "|", "{", "}", ":=", "/"]
@@ -272,7 +273,7 @@ dataDef = do
       tele <- telescope
       colon
       typ <- expr
-      return $ Constructor name (Unbound.bind tele typ)
+      return $ Constructor name [] (Unbound.bind tele typ)
 
 telescope :: LParser Telescope
 telescope = do
@@ -354,6 +355,7 @@ factor =
       prop <?> "Prop",
       set <?> "Set",
       lambda <?> "a lambda",
+      fix <?> "a fixpoint",
       try letPairExp <?> "a let pair",
       letExpr <?> "a let",
       substExpr <?> "a subst",
@@ -395,6 +397,18 @@ lambda = do
   where
     lam x m = Lam (Unbound.bind x m)
 
+-- Fixpoints have the syntax 'fix f x . e'
+fix :: LParser Term
+fix = do
+  reservedOp "fix"
+  fBind <- variable
+  binds <- many variable
+  xBind <- brackets variable
+  dot
+  body <- expr
+  return $ Fix (Unbound.bind (fBind, binds) (Unbound.bind xBind body))
+
+--
 letExpr :: LParser Term
 letExpr =
   do

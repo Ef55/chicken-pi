@@ -5,7 +5,7 @@ data List1 (T: Type 1) : Type 2 :=
   Cons1 (h: T) (t: List1 T) : List1 T
 
 concat : (T: Type 1) -> List1 T -> List1 T -> List1 T
-concat = \T l r . case l of 
+concat = fix concat T [l] . \r . case l of 
   Nil1 -> r
   Cons1 h t -> Cons1 T h (concat T t r)
 
@@ -17,6 +17,6 @@ hconcat :
   (Ls: List1 Set) -> (Rs: List1 Set) ->
   (l: HList Ls) -> (r: HList Rs) -> 
   HList (concat Set Ls Rs)
-hconcat = \Ls Rs l r . case l in HList Ls_ return HList (concat Set Ls_ Rs) of
+hconcat = fix hconcat Ls Rs [l] . \r . case l in HList Ls_ return HList (concat Set Ls_ Rs) of
   HNil -> r
   HCons HL hl Ls' l' -> HCons HL hl (concat Set Ls' Rs) (hconcat Ls' Rs l' r)

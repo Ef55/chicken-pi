@@ -102,6 +102,10 @@ data Term
     Contra Term
   | -- | pattern matching
     Case Term DestructionPredicate [Branch]
+  | -- | Fixpoint `fix f x. a`
+    Fix (Unbound.Bind (TName, [TName]) (Unbound.Bind TName Term))
+  | -- | Unapplied recursive term
+    Guarded TName Type
   deriving (Show, Generic)
 
 newtype DestructionPredicate = DestructionPredicate {getPredicate :: Unbound.Bind (Maybe TName, Maybe Pattern) (Maybe Type)}
@@ -155,7 +159,7 @@ data Telescope
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
 -- | A constructor is a name equipped with a telescope
-data Constructor = Constructor {cstrName :: TName, cstrType :: Unbound.Bind Telescope Type}
+data Constructor = Constructor {cstrName :: TName, recComponents :: [Bool], cstrType :: Unbound.Bind Telescope Type}
   deriving (Show, Generic, Typeable, Unbound.Alpha, Unbound.Subst Term)
 
 data TypeConstructor = TypeConstructor {typeName :: TName, typeDef :: Unbound.Bind Telescope (Type, [Constructor])}
@@ -170,6 +174,8 @@ data Entry
     Def TName Term
   | -- | The definition of a datatype
     Data TypeConstructor
+  | -- | Structurally smaller by pattern matching
+    Smaller Term TName
   deriving (Show, Generic, Typeable)
   deriving anyclass (Unbound.Alpha, Unbound.Subst Term)
 
