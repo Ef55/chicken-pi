@@ -273,7 +273,7 @@ dataDef = do
       tele <- telescope
       colon
       typ <- expr
-      return $ Constructor name (Unbound.bind tele typ)
+      return $ Constructor name [] (Unbound.bind tele typ)
 
 telescope :: LParser Telescope
 telescope = do

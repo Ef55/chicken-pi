@@ -77,7 +77,8 @@ tests =
           negativeTests
             "test/Fix"
             [ ("Straight recursion is disallowed", "Straight", "recursive.*u.*structurally smaller.*u"),
-              ("Constant recursion is disallowed", "Constant", "recursive.*unit.*structurally smaller.*u")
+              ("Constant recursion is disallowed", "Constant", "recursive.*unit.*structurally smaller.*u"),
+              ("Recursion on non-recursive component is disallowed", "NonRecursiveComponent", "recursive.*h.*structurally smaller.*x")
             ]
 
       failingTests =

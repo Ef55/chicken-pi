@@ -199,7 +199,7 @@ lookupConstructor name = do
     checkConstructors tc@(TypeConstructor _ bnd) =
       let names = Unbound.runFreshM $ do
             (_, (_, cstrs)) <- Unbound.unbind bnd
-            return $ map (\(Constructor n _) -> n) cstrs
+            return $ map (\(Constructor n _ _) -> n) cstrs
        in if name `elem` names then Just tc else Nothing
 
 lookupSmaller :: (MonadReader Env m) => Term -> TName -> m Bool

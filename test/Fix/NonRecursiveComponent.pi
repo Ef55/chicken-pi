@@ -1,0 +1,11 @@
+module NonRecursiveComponent where
+
+-- Adapted from "E. Giménez. Codifying guarded definitions with recursive schemes."
+
+data Empty : Prop := {}
+data V : Prop :=
+  Cnsv ((A: Prop) -> A -> A): V
+
+f : V -> Empty
+f = fix f [x] . case x of
+  Cnsv h -> f (h V (Cnsv h))
