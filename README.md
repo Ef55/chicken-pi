@@ -10,12 +10,12 @@ Note that these should not necessarily be done in order.
 
 1. Removals from pi-forall:
    - [X] Remove support for irrelevant arguments.
-   - [ ] Prevent recursive functions.
+   - [X] Prevent recursive functions.
 2. "Dirt simple" (no parameters/indices) datatypes (see [oplss notes](https://github.com/sweirich/pi-forall/blob/2023/doc/oplss.pdf) chapter 9):
    - [X] Definition.
    - [X] Pattern matching (without `as`, `in` ~and `return`~).
    - [X] Exhaustivity check for pattern matching.
-   - [ ] Relax ordering in patterns.
+   - [ ] ~Relax ordering in patterns~.
    - [X] Wildcard in patterns.
 3. Universes:
    - [X] Sorts: `Prop`, `Set`, and `Type i`.
