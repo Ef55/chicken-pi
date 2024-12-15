@@ -38,7 +38,7 @@ tests =
             ++ negativeTests
               "test/Data"
               [ ("Constructors must be for the type being defined", "DefinesOtherType", "C1.*has type D0.*should be constructor for D1"),
-                ("Constructors must fully apply the type being defined", "NotFullyApplied", "should have type.*fully applied?"),
+                ("Constructors must fully apply the type being defined", "NotFullyApplied", "fully applied?"),
                 ("Contradiction requires different constructors", "ContraNeg", "same constructor"),
                 ("Inner contradiction (unsupported)", "InnerContra", "same constructor")
               ]
@@ -52,14 +52,16 @@ tests =
               [ ("Type mentioned in return clause must match", "WrongInName", "'in' clause.*D1.*should be.*D0")
               ]
 
-      universesTests :: TestTree
       universesTests =
-        testGroup "Universes" $
-          positiveTests "test/Universes" ["Hierarchy", "ProofErasability", "SingletonElim", "SubsingletonElim"]
+        testGroup
+          "Universes"
+          $ positiveTests "test/Universes" ["Hierarchy", "ProofErasability", "SingletonElim", "SubsingletonElim"]
             ++ negativeTests
               "test/Universes"
               [ ("'Type 3' is not a 'Type 1'", "InvalidHierarchy1", "Universe level mismatch:.*Type 4.*where.*Type 1.*expected"),
-                ("Prop cannot be eliminated into set", "PropElim", "ev.*Prop.*cannot be eliminated into.*Set1.*Set")
+                ("Prop cannot be eliminated into set", "PropElim", "ev.*Prop.*cannot be eliminated into.*Set1.*Set"),
+                ("Set is not impredicative", "SetNotImpred", "Type 1.*where.*Set"),
+                ("Polymorphic identity is not in Set", "PolymorphicIdentity", "Type 1.*where.*Set")
               ]
 
       positivityTests =
@@ -91,7 +93,7 @@ tests =
               ("Wildcard is not a variable", "WildcardVar", "expecting a variable"),
               ("Missing variable in pattern", "InvalidPattern1", "Instantiation of constructor One.*u0 u1"), -- "too few variables.*\\(_:Unit\\)"
               ("Extra variable in pattern", "InvalidPattern2", "Instantiation of constructor One.*u0 u1 u3 u4"), -- "too many variables.*u4.*unused"
-              ("Dependent wildcard must not be confused", "DependentWildcardConfusion", anyErr)
+              ("Dependent wildcards must not be confused", "DependentWildcardConfusion", anyErr)
             ]
    in testGroup
         "Tests"

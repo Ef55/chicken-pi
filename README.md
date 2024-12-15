@@ -22,7 +22,7 @@ Note that these should not necessarily be done in order.
    - [X] Universe subtyping/cumulativity (see [subtyping rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#subtyping-rules)).
    - [X] Impredicative `Prop`.
    - [X] Ensure proof erasability (see [`Prod-*` rules](https://coq.inria.fr/doc/V8.19.0/refman/language/cic.html#id6)).
-   - [ ] Empty/singleton elimination (see [`Prop-extended`](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html)).
+   - [X] Empty/singleton elimination (see [`Prop-extended`](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html)).
 4. [Coq-style](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html)
    datatypes and pattern matching:
    - [X] [(Strict) positivity](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html) check.
@@ -30,9 +30,12 @@ Note that these should not necessarily be done in order.
    - [X] [Dependent pattern matching](https://coq.inria.fr/doc/V8.19.0/refman/language/core/inductive.html#the-match-with-end-construction) (i.e. `as` and `return`).
    - [X] Type parameters.
    - [ ] Uniform type parameters.
-   - [X] Type indices + pattern matching extension (`in`)
-   - [ ] `if-then-else` as an alias for pattern matching
+   - [X] Type indices + pattern matching extension (`in`).
+   - [ ] `if-then-else` as an alias for pattern matching.
    - [X] Support `data` equalities in `Contra`.
+   - [ ] Remove `subst` and `contra` builtins (see
+     [Eq.pi](pi/Logic/Eq.pi) and [Contra.pi](pi/Examples/Contra.pi)); desugar
+     instead(?).
 
 ## Known differences with Coq
 

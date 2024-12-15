@@ -23,6 +23,7 @@ module Environment
     extendSourceLocation,
     getSourceLocation,
     err,
+    cerr,
     warn,
     extendErr,
     D (..),
@@ -309,6 +310,21 @@ err :: (Disp a, MonadError Err m, MonadReader Env m) => [a] -> m b
 err d = do
   loc <- getSourceLocation
   throwError $ Err loc (sep $ map disp d)
+
+-- | Throw an error, with context!
+cerr :: (Disp a, MonadError Err m, MonadReader Env m) => [a] -> m b
+cerr d = do
+  gamma <- getLocalCtx
+  loc <- getSourceLocation
+  throwError $
+    Err
+      loc
+      ( vcat
+          [ sep $ map disp d,
+            disp (DS "In context:"),
+            disp (DD gamma)
+          ]
+      )
 
 -- | Print a warning
 warn :: (Disp a, MonadReader Env m, MonadWriter [String] m) => a -> m ()

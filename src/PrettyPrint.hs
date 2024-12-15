@@ -122,6 +122,8 @@ instance Disp (Unbound.Name Term) where
 
 -------------------------------------------------------------------------
 
+instance Disp Level
+
 instance Disp Term
 
 instance Disp Module
@@ -339,12 +341,16 @@ instance Display (Unbound.Name Term) where
     b <- ask showLongNames
     return (if b then debugDisp n else disp n)
 
-instance Display Term where
-  display (TyType LProp) = return $ PP.text "Prop"
-  display (TyType LSet) = return $ PP.text "Set"
-  display (TyType (LConst l)) = do
+instance Display Level where
+  display LProp = return $ PP.text "Prop"
+  display LSet = return $ PP.text "Set"
+  display (LConst l) = do
     i <- display l
     return $ PP.text "Type" <+> i
+
+
+instance Display Term where
+  display (TyType l) = display l
   display (Var n) = display n
   display a@(Lam b) = do
     n <- ask prec
@@ -380,52 +386,6 @@ instance Display Term where
     return $ PP.text "TRUSTME"
   display PrintMe = do
     return $ PP.text "PRINTME"
-  display (TySigma tyA bnd) =
-    Unbound.lunbind bnd $ \(x, tyB) -> do
-      if x `elem` toListOf Unbound.fv tyB
-        then do
-          dx <- display x
-          dA <- withPrec 0 $ display tyA
-          dB <- withPrec 0 $ display tyB
-          return $
-            PP.text "{"
-              <+> dx
-              <+> PP.text ":"
-              <+> dA
-              <+> PP.text "|"
-              <+> dB
-              <+> PP.text "}"
-        else do
-          p <- ask prec
-          dA <- withPrec levelSigma $ display tyA
-          dB <- withPrec levelSigma $ display tyB
-          return $ parens (levelSigma < p) (dA PP.<+> PP.text "*" PP.<+> dB)
-  display (Prod a b) = do
-    p <- ask prec
-    da <- withPrec levelProd $ display a
-    db <- withPrec levelProd $ display b
-    return $ parens (levelProd < p) (da PP.<> PP.text "," PP.<> db)
-  display (LetPair a bnd) = do
-    da <- display a
-    Unbound.lunbind bnd $ \((x, y), body) -> do
-      p <- ask prec
-      dx <- withPrec 0 $ display x
-      dy <- withPrec 0 $ display y
-      dbody <- withPrec 0 $ display body
-      return $
-        parens (levelLet < p) $
-          ( PP.text "let"
-              <+> ( PP.text "("
-                      PP.<> dx
-                      PP.<> PP.text ","
-                      PP.<> dy
-                      PP.<> PP.text ")"
-                  )
-              <+> PP.text "="
-              <+> da
-              <+> PP.text "in"
-          )
-            $$ dbody
   display (Let a bnd) = do
     Unbound.lunbind bnd $ \(x, b) -> do
       p <- ask prec

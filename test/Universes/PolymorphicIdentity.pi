@@ -1,0 +1,4 @@
+module PolymorphicIdentity where
+
+pid: Set
+pid = (A: Set) -> A -> A

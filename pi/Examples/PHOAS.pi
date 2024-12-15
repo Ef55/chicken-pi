@@ -21,7 +21,7 @@ data LTerm_ (V: Set): Set :=
   Abs (V -> LTerm_ V): LTerm_ V
   App (LTerm_ V) (LTerm_ V): LTerm_ V
 
-LTerm : Set
+LTerm : Type 1
 LTerm = (V: Set) -> LTerm_ V
 
 isValue : LTerm -> Bool
@@ -31,7 +31,7 @@ isValue = \t . case t Unit of
   Abs _ -> True
   App _ _ -> False
 
-LTerm1 : Set
+LTerm1 : Type 1
 LTerm1 = (V: Set) -> V -> LTerm_ V
 
 squash_ : (V: Set) -> LTerm_ (LTerm_ V) -> LTerm_ V

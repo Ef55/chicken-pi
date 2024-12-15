@@ -1,0 +1,33 @@
+module SigmaNotations where
+
+data Sigma (A: Set) (B: A -> Prop): Set :=
+  Prod (a: A) (b: B a): Sigma A B
+
+data Nat : Set :=
+  Z: Nat
+  S (Nat): Nat
+
+data IsEven : Nat -> Prop :=
+  EvenZ: IsEven Z
+  EvenSS (n: Nat) (IsEven n): IsEven (S (S n))
+
+-- Finally, let's test the notations
+
+EvenNat : Set
+EvenNat = {n: Nat | IsEven n}
+
+-- TODO: support eta-reduction?
+evenNat : (n : Nat) -> IsEven n -> EvenNat
+evenNat = Prod Nat (\n . IsEven n)
+
+plusTwo : Nat -> Nat
+plusTwo = \n . S (S n)
+
+two : Nat
+two = plusTwo Z
+
+four : Nat
+four = plusTwo two
+
+even4 : EvenNat
+even4 = evenNat four (EvenSS two (EvenSS Z EvenZ))
