@@ -1,21 +1,21 @@
 cabal-Version: 2.2
-name: pi-forall
-version: 0.2
+name: chicken-pi
+version: 0.1
 license: MIT
 license-file: LICENSE
-copyright: (c) 2013-2023 University of Pennsylvania
-description: An implementation of a simple dependently typed language for OPLSS 2022
-author: Stephanie Weirich <sweirich@seas.upenn.edu>, based on code by Trellys Team <trellys@...>
+copyright: (c) 2013-2024 University of Pennsylvania
+description: A toy proof assistant based on pi-forall and Coq
+author: Noe De Santo <ndesanto@seas.upenn.edu>, Tanner Duve <tannerduve@gmail.com>, based on pi-forall by Stephanie Weirich <sweirich@seas.upenn.edu>
 maintainer: Stephanie Weirich <sweirich@seas.upenn.edu>
 build-type: Simple
-tested-with: GHC == 8.10.7
+tested-with: GHC == 9.4.8
 category: Compilers/Interpreters
-homepage: https://github.com/sweirich/pi-forall
+homepage: https://github.com/Ef55/chicken-pi
 synopsis: Demo implementation of typechecker for dependently-typed language
 
 source-repository head
   type: git
-  location: https://github.com/sweirich/pi-forall
+  location: https://github.com/Ef55/chicken-pi
 
 common shared-properties
   default-language:
@@ -60,15 +60,15 @@ library
     TypeCheck
     Arbitrary
   
-executable pi-forall
+executable chicken-pi
   import: shared-properties
-  build-depends: pi-forall
+  build-depends: chicken-pi
   hs-source-dirs: app
   main-is: Main.hs
 
-test-suite test-pi-forall
+test-suite test-chicken-pi
   import: shared-properties
-  build-depends: pi-forall
+  build-depends: chicken-pi
     , QuickCheck >= 2.13.2
   type: exitcode-stdio-1.0
   hs-source-dirs: test
