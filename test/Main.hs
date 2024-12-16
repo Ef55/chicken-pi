@@ -16,16 +16,16 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck as QC
 import Text.ParserCombinators.Parsec.Error
 import Text.PrettyPrint.HughesPJ (render)
-import Text.Regex
 import TypeCheck
 import Unbound.Generics.LocallyNameless (Embed (Embed), bind, string2Name)
+import Text.Regex.TDFA
 
 --------------------------------------------------------------------------------
 -- Definition of tests to run
 --------------------------------------------------------------------------------
 
 anyErr :: String
-anyErr = ""
+anyErr = "()"
 
 unknownErr :: String
 unknownErr = "\\?\\?\\?"
@@ -175,11 +175,14 @@ failingFile expl path name expectedRaw = tester (expl ++ " [✘]") path name $ \
   ParsingFailure err -> checkErr (show err)
   TypingFailure (Err _ err) -> checkErr (render err)
   where
-    expected = concatMap (\c -> if c == ' ' then "\\s+" else [c]) expectedRaw
+    expected = concatMap (\c -> if c == ' ' then "[[:space:]]+" else [c]) expectedRaw
 
     checkErr :: String -> IO ()
     checkErr msg =
-      if isJust $ matchRegex (mkRegexWithOpts expected False False) msg
+      let options = makeRegexOpts defaultCompOpt { caseSensitive = False, multiline = False }
+          regex :: Regex = options defaultExecOpt expected
+          check :: Maybe String = regex `matchM` msg in
+      if isJust $ check
         then return ()
         else
           assertFailure $
