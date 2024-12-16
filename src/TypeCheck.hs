@@ -603,6 +603,8 @@ tcEntry (Data (TypeConstructor typ pack)) = do
   duplicateTypeBindingCheck td
   -- Check the constructors
   (cstrs, csts) <- unzip <$> Env.extendCtx (Decl td) (mapM (tcConstructor params (typ, sort)) constructors)
+  -- Check that the names are not already in use
+  mapM_ duplicateTypeBindingCheck csts
   -- Return env's extensions
   let cstDecls = Decl <$> csts
   return $ AddCtx (Data (TypeConstructor typ $ Unbound.bind params (arity, cstrs)) : Decl td : cstDecls)

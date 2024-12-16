@@ -20,10 +20,10 @@ proofRefl = \_ e . case e of
   Eq -> Truth
 
 data prop1 : Prop :=
-  prf : prop1 
+  prf1 : prop1 
 
 data prop2 : Prop := 
-  prf : prop2
+  prf2 : prop2
 
 -- Right elimination and
 andElimL : (a : Prop) -> (b : Prop) -> (conj : And a b) -> Prop 

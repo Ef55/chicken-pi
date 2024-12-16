@@ -14,8 +14,8 @@ data T: Set :=
 
 discC0 : T -> Prop
 discC0 = \t . case t return Prop of
-  C0 -> True
-  C1 -> False
+  C0 -> Truth
+  C1 -> Falsum
 
 eqToDisc : (x: T) -> Eq T C0 x -> discC0 x
 eqToDisc = \x . case x as x_ return (Eq T C0 x_ -> discC0 x_) of
@@ -26,8 +26,8 @@ eqToDisc = \x . case x as x_ return (Eq T C0 x_ -> discC0 x_) of
 
 notEq : not (Eq T C0 C1)
 -- TODO: make it so that the type annotation is not required
-notEq = \eq . case (eqToDisc C1 eq : False) of {}
+notEq = \eq . case (eqToDisc C1 eq : Falsum) of {}
   
 -- Unfolding not yields the statement we were looking for
-contradiction : Eq T C0 C1 -> False
+contradiction : Eq T C0 C1 -> Falsum
 contradiction = notEq
