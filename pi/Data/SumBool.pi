@@ -1,0 +1,34 @@
+module SumBool where
+
+import Bool
+import Logic
+
+data SumBool (P: Prop) (Q: Prop): Set :=
+  SumTrue (P): SumBool P Q
+  SumFalse (Q): SumBool P Q
+
+dropJustifications : (P: Prop) -> (Q: Prop) -> SumBool P Q -> Bool
+dropJustifications = \_ _ b . case b of
+  SumTrue _ -> True
+  SumFalse _ -> False
+
+sumNeg : (P: Prop) -> (Q: Prop) -> SumBool P Q -> SumBool Q P
+sumNeg = \P Q b . case b of
+  SumTrue p -> SumFalse Q P p
+  SumFalse q -> SumTrue Q P q
+
+sumAnd : (P: Prop) -> (Q: Prop) -> (R: Prop) -> (S: Prop) ->
+  SumBool P Q -> SumBool R S -> SumBool (And P R) (Or Q S)
+sumAnd = \P Q R S b0 b1 . case b0 of
+  SumTrue p -> case b1 of
+    SumTrue r -> SumTrue (And P R) (Or Q S) (conj P R p r)
+    SumFalse s -> SumFalse (And P R) (Or Q S) (ror Q S s)
+  SumFalse q -> SumFalse (And P R) (Or Q S) (lor Q S q)
+
+sumOr : (P: Prop) -> (Q: Prop) -> (R: Prop) -> (S: Prop) ->
+  SumBool P Q -> SumBool R S -> SumBool (Or P R) (And Q S)
+sumOr = \P Q R S b0 b1 . case b0 of
+  SumTrue p -> SumTrue (Or P R) (And Q S) (lor P R p)
+  SumFalse q -> case b1 of
+    SumTrue r -> SumTrue (Or P R) (And Q S) (ror P R r)
+    SumFalse s -> SumFalse (Or P R) (And Q S) (conj Q S q s)

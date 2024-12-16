@@ -4,6 +4,11 @@ data Bool : Set :=
   True : Bool
   False : Bool
 
+neg : Bool -> Bool
+neg = \b . case b of
+  True -> False
+  False -> True
+
 and : Bool -> Bool -> Bool
 and = \l r . case l of
   True -> r

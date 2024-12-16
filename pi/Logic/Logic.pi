@@ -1,5 +1,10 @@
 module Logic where
 
+--------------------------------------------------------------------------------
+--- Basic constructs
+--------------------------------------------------------------------------------
+
+
 data Truth: Prop :=
   trivial: Truth
 
@@ -15,5 +20,50 @@ data Or (P: Prop) (Q: Prop) : Prop :=
 not : Prop -> Prop
 not = \P . P -> Falsum
 
-exfalso : (P: Prop) -> (Q: Prop) -> P -> not P -> Q
-exfalso = \_ _ p np . case np p of {}
+Iff : Prop -> Prop -> Prop
+Iff = \ P Q . And (P -> Q) (Q -> P)
+
+--------------------------------------------------------------------------------
+--- Some useful properties
+--------------------------------------------------------------------------------
+
+exfalso : (P: Prop) -> P -> not P -> (Q: Prop) -> Q
+exfalso = \_ p np _ . case np p of {}
+
+cexfalso : (P: Prop) -> (Q: Prop) -> And P (not P) -> Q
+cexfalso = \P Q c . case c of
+  conj p np -> exfalso P p np Q
+
+andCollapse : (P: Prop) -> And P P -> P
+andCollapse = \_ c . case c of
+  conj p _ -> p
+
+orCollapse : (P: Prop) -> Or P P -> P
+orCollapse = \_ d . case d of
+  lor p -> p 
+  ror p -> p
+
+doubleNegate : (P: Prop) -> P -> not (not P)
+doubleNegate = \_ p np . np p 
+
+--------------------------------------------------------------------------------
+--- Intuitionist De Morgan laws
+--------------------------------------------------------------------------------
+
+deMorgan1 : (P: Prop) -> (Q: Prop) -> not (Or P Q) -> And (not P) (not Q)
+deMorgan1 = \P Q nor_P_Q .
+  let nP = ((\p . nor_P_Q (lor P Q p)) : not P) in
+  let nQ = ((\q . nor_P_Q (ror P Q q)): not Q) in
+  conj (not P) (not Q) nP nQ
+
+deMorgan2 : (P: Prop) -> (Q: Prop) -> And (not P) (not Q) -> not (Or P Q)
+deMorgan2 = \_ _ and_nP_nQ or_P_Q . case and_nP_nQ of
+  conj nP nQ -> case or_P_Q of
+    lor p -> nP p
+    ror q -> nQ q
+
+deMorgan3 : (P: Prop) -> (Q: Prop) -> Or (not P) (not Q) -> not (And P Q)
+deMorgan3 = \_ _ or_nP_nQ and_P_Q . case and_P_Q of
+  conj p q -> case or_nP_nQ of
+    lor nP -> nP p
+    ror nQ -> nQ q

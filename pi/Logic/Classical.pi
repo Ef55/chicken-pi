@@ -1,0 +1,76 @@
+module Classical where
+
+import Logic
+
+--------------------------------------------------------------------------------
+--- "Classical-complete" principles
+--------------------------------------------------------------------------------
+
+-- Principle of Excluded Middle
+PEM : Prop
+PEM = (P: Prop) -> Or P (not P)
+
+-- Proof By Contraposition
+-- Funnily enough, a Proof By Contradiction is just PBC with P := Truth;
+PBC : Prop
+PBC = (P: Prop) -> (Q: Prop) -> (not Q -> not P) -> P -> Q
+
+-- Double Negation Elimination
+DNE : Prop
+DNE = (P: Prop) -> (not (not P)) -> P
+
+--------------------------------------------------------------------------------
+--- Proof of equivalence of "complete" principles
+--------------------------------------------------------------------------------
+
+-- First thing first: "any instantiation of PEM does not not hold"
+-- Note that this holds without any assumption!
+
+nnPemInst : (P: Prop) -> not (not (Or P (not P)))
+nnPemInst = \ P nor_nP_nnP .
+  case deMorgan1 P (not P) nor_nP_nnP of
+    conj np nnp -> exfalso (not P) np nnp Falsum
+
+-- Cyclic equivalence: PEM -> PBC -> DNE -> PEM
+
+pemImpliesPbc : PEM -> PBC
+pemImpliesPbc = \pem P Q contrap p .
+  case pem Q of
+    lor q -> q 
+    ror nq -> exfalso P p (contrap nq) Q
+
+pbcImpliesDne : PBC -> DNE
+pbcImpliesDne = \pbc P . pbc (not (not P)) P (doubleNegate (not P))
+
+dneImpliesPem : DNE -> PEM
+dneImpliesPem = \dne P . dne (Or P (not P)) (nnPemInst P)
+
+--------------------------------------------------------------------------------
+--- Other principles which don't hold in IL but do hold in CL
+--------------------------------------------------------------------------------
+
+-- Weak Principle of Excluded Middle
+WPEM : Prop
+WPEM = (P: Prop) -> Or (not P) (not (not P))
+
+-- De Morgan's law no4
+DeMorgan4 : Prop
+DeMorgan4 = (P: Prop) -> (Q: Prop) -> not (And P Q) -> Or (not P) (not Q)
+
+--------------------------------------------------------------------------------
+--- Proof that the weaker principles are equivalent and hold in CL
+--------------------------------------------------------------------------------
+
+-- First, we show that PEM -> WPEM (to no one's surprise) 
+weakenPEM : PEM -> WPEM
+weakenPEM = \pem P . pem (not P)
+
+-- WPEM <-> DM4
+
+-- wpemImpliesDm4 : WPEM -> DeMorgan4
+-- wpemImpliesDm4 = \wpem P Q nand_p_q . TRUSTME
+
+dm4ImpliesWpem : DeMorgan4 -> WPEM
+dm4ImpliesWpem = \dm4 P .
+  let nand_np_nnp = cexfalso P Falsum in
+  dm4 P (not P) nand_np_nnp

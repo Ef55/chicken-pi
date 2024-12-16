@@ -107,8 +107,8 @@ tests =
 
 examples :: TestTree
 examples =
-  let dataExamples = testGroup "Data" (positiveTests "pi/Data" ["Void", "Unit", "Fun", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma", "Fin", "Vect", "HList"])
-      logicExamples = testGroup "Logic" $ positiveTests "pi/Logic" ["Logic", "Eq"]
+  let dataExamples = testGroup "Data" (positiveTests "pi/Data" ["Void", "Unit", "Fun", "Bool", "Nat", "Pos", "Maybe", "List", "Sigma", "Fin", "Vect", "HList", "SumBool"])
+      logicExamples = testGroup "Logic" $ positiveTests "pi/Logic" ["Logic", "Eq", "Classical"]
       otherExamples = testGroup "Examples" $ positiveTests "pi/Examples" ["PHOAS", "Contra"]
    in testGroup
         "Examples"
